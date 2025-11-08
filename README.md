@@ -19,38 +19,37 @@ Fast, extensible desktop + browser extension YouTube & generic file downloader.
 - Auto-start option, clipboard detection, size persistence
 
 ## Quick Install (Linux)
+Recommended (auto-detects distro, grabs prebuilt package if available, else falls back):
+```bash
+curl -fsSL https://raw.githubusercontent.com/Dawaman43/FastTubeDownloader/main/scripts/easy_install.sh | bash
+```
+This will:
+- Install dependencies (python3-gi / GTK3, yt-dlp, aria2)
+- Download and install the latest .deb or .rpm (if published)
+- Fall back to local install via `setup.sh` when no package asset is found
+
+Manual alternative:
 ```bash
 ./setup.sh
 ```
-Then load the unpacked extension:
-- Chrome: chrome://extensions (Developer Mode) > Load unpacked > project root
-- Firefox: web-ext run (see Packaging below)
+Then load the browser extension (for now still manual):
+- Chrome / Chromium: chrome://extensions (Developer Mode) > Load unpacked > repo root
+- Firefox: about:debugging#/runtime/this-firefox > Load Temporary Add-on > select `manifest.firefox.json`
 
-Or download prebuilt archives from the Releases page when available.
+To keep a permanent extension ID in Chrome, generate a key first (`python3 tools/generate_extension_key.py`) then reload.
 
-### Easy Binary Install (Deb/RPM)
-If you just want the app installed without building anything, download the latest prebuilt package from the GitHub Releases page and install with one or two commands.
-
-Debian / Ubuntu (.deb):
+### Direct Package Install (If you prefer manual)
+Debian / Ubuntu:
 ```bash
 wget -O fasttube.deb https://github.com/Dawaman43/FastTubeDownloader/releases/latest/download/fasttube-downloader_amd64.deb
 sudo apt install ./fasttube.deb
 ```
-
-Fedora / RHEL / openSUSE (RPM):
+Fedora / RHEL / openSUSE:
 ```bash
 wget -O fasttube.rpm https://github.com/Dawaman43/FastTubeDownloader/releases/latest/download/fasttube-downloader.x86_64.rpm
 sudo rpm -i fasttube.rpm
 ```
-
-That’s it—no need to run the packaging build steps. The package installs:
-- Desktop app under /opt (or distro-appropriate paths)
-- Native messaging host file
-- Icon + desktop launcher
-
-Then load the browser extension either from `dist/` (build with `scripts/build.sh`) or use the extension zip assets from the same Release.
-
-If asset names differ (e.g., versioned filenames), adjust the commands to match what you see on the Release page.
+If the above links 404, the release doesn’t yet contain those assets—either wait for the next tagged build (CI attaches them) or use `scripts/easy_install.sh` / `./setup.sh`.
 
 ## Stable Extension ID
 Generate and inject a key (produces a stable ID):
