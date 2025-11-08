@@ -24,7 +24,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           try {
             const rid = message.requestId;
             if (rid && downloads[rid]) {
-              // Update by requestId mapping
               if (message.status === 'progress') {
                 downloads[rid].progress = Math.max(0, Math.min(100, Math.round(message.percent || 0)));
                 downloads[rid].status = 'downloading';
@@ -35,7 +34,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               chrome.runtime.sendMessage({ action: 'progress', id: rid, data: message });
               return;
             }
-            // Fallback: try to match by URL
             if (message.url) {
               const matchId = Object.keys(downloads).find(id => downloads[id].url === message.url);
               if (matchId) {
@@ -58,13 +56,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
     }
 
-    // Merge options with storage defaults
     chrome.storage.sync.get(['format', 'quality', 'subs'], (prefs) => {
       const message = {
         action: 'enqueue',
         url: request.url,
         title: request.title,
-        // Prefer explicit formatId; map to bridge.py expects 'formatId'
         formatId: request.formatId || '',
         format: request.format || prefs.format || 'Best Video + Audio',
         quality: request.formatId ? '' : (request.quality || prefs.quality || ''),

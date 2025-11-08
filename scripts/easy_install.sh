@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# FastTube Downloader easy installer
-# Detects distro, downloads latest prebuilt package (.deb/.rpm) if available,
-# installs dependencies, falls back to local install if no package asset is found.
 
 set -euo pipefail
 REPO="Dawaman43/FastTubeDownloader"
@@ -17,7 +14,7 @@ log(){ echo -e "\e[1;32m[fasttube]\e[0m $*"; }
 warn(){ echo -e "\e[1;33m[fasttube warn]\e[0m $*"; }
 err(){ echo -e "\e[1;31m[fasttube error]\e[0m $*" >&2; }
 
-fetch_asset_url(){ # pattern
+fetch_asset_url(){ 
   local pattern="$1"
   curl -s "$API" | grep 'browser_download_url' | grep -E "$pattern" | head -n1 | cut -d '"' -f4 || true
 }
@@ -57,7 +54,6 @@ install_rpm(){
 }
 
 fetch_tarball(){
-  # Try latest release tarball, else fall back to main branch tarball
   local url
   url=$(curl -s "$API" | grep '"tarball_url"' | head -n1 | cut -d '"' -f4 || true)
   if [[ -z "$url" ]]; then

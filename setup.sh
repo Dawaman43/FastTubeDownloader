@@ -1,5 +1,4 @@
 #!/bin/bash
-# FastTubeDownloader Installer
 
 set -e  
 

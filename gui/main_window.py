@@ -67,9 +67,7 @@ class DownloadItem:
         self.total = ''
         self.downloaded = ''
         self.gid = None
-        # Connection to native host (bridge) that requested this download, if any
         self.client_conn = None
-        # Request identifier supplied by the extension so we can route progress back
         self.client_req_id = None
 
     def __repr__(self):
@@ -1148,7 +1146,6 @@ class MainWindow(Gtk.Window):
 
     def _handle_client(self, conn):
         try:
-            # Read only the first JSON line so the connection stays open for streaming progress updates.
             conn.settimeout(5.0)
             buf = b''
             while b'\n' not in buf and len(buf) < 65536:
