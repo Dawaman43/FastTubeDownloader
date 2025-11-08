@@ -63,7 +63,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const message = {
         url: request.url,
         title: request.title,
-        format: request.formatId || request.format || prefs.format || 'Best Video + Audio',
+        // Prefer explicit formatId; map to bridge.py expects 'formatId'
+        formatId: request.formatId || '',
+        format: request.format || prefs.format || 'Best Video + Audio',
         quality: request.formatId ? '' : (request.quality || prefs.quality || ''),
         subs: (request.subs !== undefined ? request.subs : (prefs.subs !== undefined ? prefs.subs : true)) ? 'y' : 'n',
         confirm: false,

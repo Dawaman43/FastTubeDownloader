@@ -93,11 +93,26 @@ def _retry_connect(payload: dict, total_wait: float = 5.0):
 
 
 def forward_to_gui(payload: dict) -> dict:
+    """
+    Forward a request to the GUI control server.
+
+    Behaviour:
+    - If a GUI instance is already listening on HOST:PORT, send the payload and
+      stream responses back to the browser.
+    - If not reachable, attempt to launch the GUI and then retry connecting for
+      a short period.
+    """
+    # Quick reachability probe (separate from _connect_and_send, which swallows errors)
     try:
-        # First, try to connect to an existing GUI instance
+        s = socket.create_connection((HOST, PORT), timeout=0.2)
+        try:
+            s.close()
+        except Exception:
+            pass
+        # Server is up; use the streaming helper
         return _connect_and_send(payload, timeout=0.2)
     except Exception:
-        # If connection fails, assume GUI is not running and try to launch it.
+        # Not reachable; try to launch the GUI
         try:
             launcher = '/usr/bin/fasttube-downloader'
             if os.path.exists(launcher) and os.access(launcher, os.X_OK):
@@ -107,7 +122,7 @@ def forward_to_gui(payload: dict) -> dict:
                 script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 gui_path = os.path.join(script_dir, 'gui', 'main_window.py')
                 subprocess.Popen(['python3', gui_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-            
+
             # After launching, wait a bit and retry connecting
             return _retry_connect(payload, total_wait=6.0)
         except Exception as e:
