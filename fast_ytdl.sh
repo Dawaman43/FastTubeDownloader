@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# FastTube Downloader helper script
-# CLI (GUI) args:
-#   fast_ytdl.sh URL DOWNLOAD_FOLDER FORMAT QUALITY SUBS SPEED_KBPS ARIA_CONNECTIONS ARIA_SPLITS FRAGMENT_CONCURRENCY CATEGORY_MODE
-# If invoked with no positional args it enters Native Messaging mode (reads length-prefixed JSON requests from stdin).
 
 set -o pipefail
 
@@ -24,9 +20,6 @@ send_json() {
     printf "%s" "$json"
 }
 
-############################################
-# CLI MODE
-############################################
 if [ $# -ge 1 ]; then
     URL="$1"; DOWNLOAD_FOLDER="${2:-.}"; FORMAT="${3:-Best (default)}"; QUALITY="${4:-}"; SUBS="${5:-n}"; SPEED_LIMIT_KBPS="${6:-}"; ARIA_CONNECTIONS="${7:-32}"; ARIA_SPLITS="${8:-32}"; FRAGMENT_CONCURRENCY="${9:-16}"; CATEGORY_MODE="${10:-idm}";
 
@@ -39,7 +32,6 @@ if [ $# -ge 1 ]; then
     [ "$ARIA_CONNECTIONS" -gt 0 ] || ARIA_CONNECTIONS=32
     [ "$ARIA_SPLITS" -gt 0 ] || ARIA_SPLITS=32
     [ "$FRAGMENT_CONCURRENCY" -gt 0 ] || FRAGMENT_CONCURRENCY=16
-        # Clamp aria2 max connections per server to its allowed range (1-16)
         if [ "$ARIA_CONNECTIONS" -gt 16 ]; then ARIA_CONNECTIONS=16; fi
         if [ "$ARIA_CONNECTIONS" -lt 1 ]; then ARIA_CONNECTIONS=1; fi
 
@@ -49,7 +41,6 @@ if [ $# -ge 1 ]; then
     FORMAT_LC=$(echo "$FORMAT" | tr '[:upper:]' '[:lower:]')
     SUBDIR=""
         if [ "$CATEGORY_MODE" = "idm" ]; then
-                # Route Audio Only to Music; everything else to Videos
                 if [ "$FORMAT_LC" = "audio only" ]; then SUBDIR="Music"; else SUBDIR="Videos"; fi
                 mkdir -p "$SUBDIR"
         fi
@@ -58,12 +49,10 @@ if [ $# -ge 1 ]; then
 
         SPEED_ARG=""; [ -n "$SPEED_LIMIT_KBPS" ] && SPEED_ARG="--max-overall-download-limit=${SPEED_LIMIT_KBPS}K"
 
-        # Quick sanity checks to fail fast with helpful messages
         if ! command -v yt-dlp >/dev/null 2>&1; then
                 echo "ERROR: yt-dlp is not installed or not in PATH. Please install it: pip install yt-dlp or your package manager." >&2
                 exit 127
         fi
-        # aria2c is optional; if missing we'll let Python path drop back to internal downloader automatically
         if ! command -v aria2c >/dev/null 2>&1; then
                 echo "WARN: aria2c not found. Falling back to yt-dlp's internal downloader (slower)." >&2
         fi
@@ -88,7 +77,6 @@ if [ $# -ge 1 ]; then
     echo "Output template: $OUTPUT_TEMPLATE"
     echo "=============================================="
 
-        # Build shell-side opts for CLI fallback if Python path fails
         SUBS_OPT=""; [ "$SUBS" = "y" ] || [ "$SUBS" = "Y" ] || [ "$SUBS" = "true" ] && SUBS_OPT="--write-subs --sub-lang en --convert-subs srt"
         FORMAT_OPT=""
         case "$FORMAT" in
@@ -98,7 +86,6 @@ if [ $# -ge 1 ]; then
                 *) FORMAT_OPT="-f $FORMAT" ;;
         esac
         if [[ "$FORMAT" != *"audio"* ]] && [ -n "$QUALITY" ]; then
-                # Cap by height if quality provided and not audio-only
                 FORMAT_OPT="-f best[height<=$QUALITY]"
         fi
         ARIA_ARGS="-x $ARIA_CONNECTIONS -s $ARIA_SPLITS -k 1M --min-split-size=1M --file-allocation=none"
