@@ -1,0 +1,15 @@
+Source: fasttube-downloader
+Section: utils
+Priority: optional
+Maintainer: FastTube Downloader <maintainer@example.com>
+Standards-Version: 4.7.0
+Build-Depends: debhelper-compat (= 13), python3, python3-gi, yt-dlp, aria2
+Homepage: https://github.com/Dawaman43/FastTubeDownloader
+Rules-Requires-Root: no
+
+Package: fasttube-downloader
+Architecture: any
+Depends: ${misc:Depends}, python3, python3-gi, yt-dlp, aria2
+Description: FastTube Downloader – YouTube & generic file downloader
+ Fast GTK desktop + browser extension integrated downloader using yt-dlp and aria2.
+ Includes playlist deduplication, generic segmented downloads, extension integration.

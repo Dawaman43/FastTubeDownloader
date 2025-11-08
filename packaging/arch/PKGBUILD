@@ -1,0 +1,23 @@
+pkgname=fasttube-downloader
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="FastTube Downloader – YouTube & generic file downloader"
+arch=(any)
+url="https://github.com/Dawaman43/FastTubeDownloader"
+license=(MIT)
+depends=(python python-gobject gtk3 yt-dlp aria2)
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  install -d "$pkgdir/opt/FastTubeDownloader"
+  rsync -a --exclude '.git' --exclude 'dist' --exclude '__pycache__' --exclude 'packaging' . "$pkgdir/opt/FastTubeDownloader/"
+  install -Dm755 packaging/launch-wrapper.sh "$pkgdir/usr/bin/fasttube-downloader"
+  install -Dm644 packaging/fasttube-downloader.desktop "$pkgdir/usr/share/applications/fasttube-downloader.desktop"
+  install -Dm644 icon16.png "$pkgdir/usr/share/icons/hicolor/16x16/apps/fasttube-downloader.png"
+  install -Dm644 icon48.png "$pkgdir/usr/share/icons/hicolor/48x48/apps/fasttube-downloader.png"
+  install -Dm644 icon128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/fasttube-downloader.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

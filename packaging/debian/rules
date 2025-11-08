@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+	@echo "No build step needed (Python/GTK app)"
+
+override_dh_auto_install:
+	mkdir -p debian/fasttube-downloader/opt/FastTubeDownloader
+	rsrsync="rsync -a --exclude '.git' --exclude 'dist' --exclude '__pycache__' --exclude 'packaging'"; \
+	$rsrsync ./ debian/fasttube-downloader/opt/FastTubeDownloader/ ; \
+	chmod +x debian/fasttube-downloader/opt/FastTubeDownloader/fast_ytdl.sh
+	install -Dm755 setup.sh debian/fasttube-downloader/usr/bin/fasttube-downloader-setup
+	# Launcher wrapper
+	install -Dm755 packaging/launch-wrapper.sh debian/fasttube-downloader/usr/bin/fasttube-downloader
+	# Desktop entry
+	install -Dm644 packaging/fasttube-downloader.desktop debian/fasttube-downloader/usr/share/applications/fasttube-downloader.desktop
+	# Icons
+	install -Dm644 icon16.png debian/fasttube-downloader/usr/share/icons/hicolor/16x16/apps/fasttube-downloader.png
+	install -Dm644 icon48.png debian/fasttube-downloader/usr/share/icons/hicolor/48x48/apps/fasttube-downloader.png
+	install -Dm644 icon128.png debian/fasttube-downloader/usr/share/icons/hicolor/128x128/apps/fasttube-downloader.png

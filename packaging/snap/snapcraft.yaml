@@ -1,0 +1,31 @@
+name: fasttube-downloader
+base: core22
+version: '0.1.0'
+summary: FastTube Downloader – YouTube & generic file downloader
+description: |
+  Fast GTK desktop + browser extension integrated downloader using yt-dlp and aria2.
+  Includes playlist deduplication, generic segmented downloads, extension integration.
+
+grade: stable
+confinement: classic
+
+apps:
+  fasttube-downloader:
+    command: usr/bin/fasttube-downloader
+
+parts:
+  fasttube:
+    plugin: dump
+    source: ../..
+    stage-packages:
+      - python3
+      - python3-gi
+      - gir1.2-gtk-3.0
+      - yt-dlp
+      - aria2
+    organize:
+      packaging/launch-wrapper.sh: usr/bin/fasttube-downloader
+      packaging/fasttube-downloader.desktop: usr/share/applications/fasttube-downloader.desktop
+      icon16.png: usr/share/icons/hicolor/16x16/apps/fasttube-downloader.png
+      icon48.png: usr/share/icons/hicolor/48x48/apps/fasttube-downloader.png
+      icon128.png: usr/share/icons/hicolor/128x128/apps/fasttube-downloader.png

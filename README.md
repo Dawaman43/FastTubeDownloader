@@ -38,6 +38,68 @@ Outputs:
 
 You can also load unpacked directly from the repo during development.
 
+## Linux Distribution Packages
+
+### Debian/Ubuntu (.deb)
+We provide a Debian packaging layout under `packaging/debian/`.
+
+Build locally (requires `debhelper`):
+```bash
+cd packaging
+dpkg-buildpackage -us -uc
+```
+The resulting `.deb` will appear one level up. Install with:
+```bash
+sudo apt install ./fasttube-downloader_*.deb
+```
+
+### Fedora/openSUSE/RHEL (RPM)
+Spec file is at `packaging/rpm/fasttube-downloader.spec`.
+
+Build locally (requires `rpm-build`):
+```bash
+mkdir -p ~/rpmbuild/{SOURCES,SPECS}
+git archive --format=tar.gz --prefix=fasttube-downloader-0.1.0/ -o ~/rpmbuild/SOURCES/fasttube-downloader-0.1.0.tar.gz HEAD
+cp packaging/rpm/fasttube-downloader.spec ~/rpmbuild/SPECS/
+rpmbuild -ba ~/rpmbuild/SPECS/fasttube-downloader.spec
+```
+
+### Arch Linux (PKGBUILD)
+PKGBUILD is at `packaging/arch/PKGBUILD`.
+
+Build locally (requires `base-devel`):
+```bash
+cd packaging/arch
+makepkg -si
+```
+
+### AppImage
+AppImage recipe is provided at `packaging/AppImageBuilder.yml`.
+
+Build (requires `appimage-builder`):
+```bash
+appimage-builder --recipe packaging/AppImageBuilder.yml
+```
+
+### Flatpak
+Flatpak manifest at `packaging/flatpak/com.fasttube.downloader.json`.
+
+Build and install locally (requires `flatpak-builder`):
+```bash
+flatpak-builder build-dir packaging/flatpak/com.fasttube.downloader.json --install --user --force-clean
+flatpak run com.fasttube.downloader
+```
+
+### Snap
+Snapcraft recipe at `packaging/snap/snapcraft.yaml`.
+
+Build (requires `snapcraft`):
+```bash
+cd packaging/snap
+snapcraft
+```
+Note: Snap is configured with `confinement: classic` to access aria2/yt-dlp and the filesystem.
+
 ## Native Messaging
 Setup script installs the host JSON for Chrome/Chromium (and prompts or auto-computes extension ID). For Firefox, copy the same host file into:
 ```

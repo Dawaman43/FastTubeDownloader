@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=FastTube Downloader
+GenericName=YouTube Video Downloader
+Comment=Queue and download YouTube videos quickly with yt-dlp + aria2
+Exec=fasttube-downloader
+Icon=fasttube-downloader
+Terminal=false
+Type=Application
+Categories=AudioVideo;Network;Utility;
+StartupWMClass=FastTube Downloader
+Keywords=youtube;download;video;yt-dlp;aria2;

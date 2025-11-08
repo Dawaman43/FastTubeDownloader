@@ -1,0 +1,35 @@
+version: 1
+script:
+  - mkdir -p AppDir/opt/FastTubeDownloader
+  - rsync -a --exclude '.git' --exclude 'dist' --exclude '__pycache__' --exclude 'packaging' . AppDir/opt/FastTubeDownloader/
+  - install -Dm755 packaging/launch-wrapper.sh AppDir/usr/bin/fasttube-downloader
+  - install -Dm644 packaging/fasttube-downloader.desktop AppDir/usr/share/applications/fasttube-downloader.desktop
+  - install -Dm644 icon128.png AppDir/usr/share/icons/hicolor/128x128/apps/fasttube-downloader.png
+AppDir:
+  path: AppDir
+  app_info:
+    id: com.fasttube.downloader
+    name: FastTube Downloader
+    icon: fasttube-downloader
+    version: 0.1.0
+    exec: usr/bin/fasttube-downloader
+    exec_args: "$@"
+  runtime:
+    env:
+      PYTHONPATH: "$APPDIR/opt/FastTubeDownloader"
+      GI_TYPELIB_PATH: "/usr/lib/girepository-1.0"
+      LD_LIBRARY_PATH: "/usr/lib"
+  apt:
+    arch: amd64
+    allow_unauthenticated: true
+    sources:
+      - sourceline: 'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main universe'
+    include:
+      - python3
+      - python3-gi
+      - gir1.2-gtk-3.0
+      - yt-dlp
+      - aria2
+AppImage:
+  arch: x86_64
+  update-information: None
