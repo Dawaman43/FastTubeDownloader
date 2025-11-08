@@ -2,7 +2,7 @@
 
 Fast, extensible desktop + browser extension YouTube & generic file downloader.
 
-![screenshot](https://raw.githubusercontent.com/Dawaman43/FastTubeDownloader/main/.github/screenshot.png)
+![FastTube Downloader Screenshot](https://github.com/Dawaman43/FastTubeDownloader/blob/main/.github/screenshot.png?raw=1)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub tag](https://img.shields.io/github/v/tag/Dawaman43/FastTubeDownloader?sort=semver)](https://github.com/Dawaman43/FastTubeDownloader/tags)
