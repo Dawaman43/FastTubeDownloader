@@ -21,7 +21,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       if (nativePort) {
         nativePort.onMessage.addListener((message) => {
-          handleNativeMessage(message, downloadId);
+          try {
+            const rid = message.requestId;
+            if (rid && downloads[rid]) {
+              // Update by requestId mapping
+              if (message.status === 'progress') {
+                downloads[rid].progress = Math.max(0, Math.min(100, Math.round(message.percent || 0)));
+                downloads[rid].status = 'downloading';
+              } else if (message.status === 'finished' || message.status === 'error') {
+                downloads[rid].status = message.status;
+                setTimeout(() => delete downloads[rid], 5000);
+              }
+              chrome.runtime.sendMessage({ action: 'progress', id: rid, data: message });
+              return;
+            }
+            // Fallback: try to match by URL
+            if (message.url) {
+              const matchId = Object.keys(downloads).find(id => downloads[id].url === message.url);
+              if (matchId) {
+                if (message.status === 'progress') {
+                  downloads[matchId].progress = Math.max(0, Math.min(100, Math.round(message.percent || 0)));
+                  downloads[matchId].status = 'downloading';
+                } else if (message.status === 'finished' || message.status === 'error') {
+                  downloads[matchId].status = message.status;
+                  setTimeout(() => delete downloads[matchId], 5000);
+                }
+                chrome.runtime.sendMessage({ action: 'progress', id: matchId, data: message });
+              }
+            }
+          } catch (e) {}
         });
         nativePort.onDisconnect.addListener(() => {
           const lastError = chrome.runtime.lastError?.message || '';
@@ -39,7 +67,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         quality: request.formatId ? '' : (request.quality || prefs.quality || ''),
         subs: (request.subs !== undefined ? request.subs : (prefs.subs !== undefined ? prefs.subs : true)) ? 'y' : 'n',
         confirm: false,
-        show: true
+        show: true,
+        requestId: downloadId
       };
       const postOrFallback = () => {
         if (nativePort) {

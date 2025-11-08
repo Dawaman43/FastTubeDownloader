@@ -35,17 +35,47 @@ def read_native_message():
 
 
 def _connect_and_send(payload: dict, timeout: float = 2.0):
-    with socket.create_connection((HOST, PORT), timeout=timeout) as s:
-        s.sendall((json.dumps(payload) + '\n').encode('utf-8'))
-        s.shutdown(socket.SHUT_WR)
-        s.settimeout(2.0)
+    # Open a socket to the GUI control server, send the payload and stream any
+    # JSON-lines received back to the connected extension process.
+    last = None
+    try:
+        s = socket.create_connection((HOST, PORT), timeout=timeout)
         try:
-            resp = s.recv(4096)
-            if resp:
-                return json.loads(resp.decode('utf-8'))
-        except Exception:
-            pass
-    return {"status": "queued"}
+            s.sendall((json.dumps(payload) + '\n').encode('utf-8'))
+            # Read repeatedly until the GUI closes the connection. Each line is
+            # expected to be a JSON object followed by a newline. Forward each
+            # parsed object to the browser extension via native messaging.
+            s.settimeout(0.5)
+            buf = b''
+            while True:
+                try:
+                    chunk = s.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    while b'\n' in buf:
+                        line, buf = buf.split(b'\n', 1)
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            obj = json.loads(line.decode('utf-8'))
+                            last = obj
+                            send_native_message(obj)
+                        except Exception:
+                            # ignore malformed lines
+                            pass
+                except socket.timeout:
+                    # continue reading until closed
+                    continue
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return last or {"status": "queued"}
 
 def _retry_connect(payload: dict, total_wait: float = 5.0):
     deadline = time.time() + total_wait

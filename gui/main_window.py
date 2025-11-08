@@ -67,6 +67,10 @@ class DownloadItem:
         self.total = ''
         self.downloaded = ''
         self.gid = None
+        # Connection to native host (bridge) that requested this download, if any
+        self.client_conn = None
+        # Request identifier supplied by the extension so we can route progress back
+        self.client_req_id = None
 
     def __repr__(self):
         return f"<DownloadItem {self.title!r} {self.progress}% {self.status}>"
@@ -1411,6 +1415,15 @@ class MainWindow(Gtk.Window):
         self.update_dashboard_counts()
         if status in ("Completed", "Failed"):
             GLib.idle_add(self._remove_big_row, item)
+            # Stream terminal status to native client and close connection
+            try:
+                self._stream_client_update(item, {
+                    "status": "finished" if status == "Completed" else "error",
+                    "url": item.url,
+                    "title": item.title
+                }, close_after=True)
+            except Exception:
+                pass
         else:
             GLib.idle_add(self._add_or_update_big_row, item)
         GLib.idle_add(self._update_big_counts)
@@ -1556,6 +1569,16 @@ class MainWindow(Gtk.Window):
         dots = '.' * ((progress // 5) % 3 + 1)
         GLib.idle_add(self.liststore.set, item.treeiter, 2, int(progress))
         self._update_progress_text(item)
+        # Stream progress to native client if attached
+        try:
+            self._stream_client_update(item, {
+                "status": "progress",
+                "percent": int(progress),
+                "url": item.url,
+                "title": item.title
+            })
+        except Exception:
+            pass
         if self._mini_popup is not None and self._mini_idx is not None:
             def _upd_bar():
                 try:
@@ -1572,6 +1595,28 @@ class MainWindow(Gtk.Window):
                     pass
                 return False
             GLib.idle_add(_upd_bar)
+
+    def _stream_client_update(self, item, obj: dict, close_after: bool = False):
+        conn = getattr(item, 'client_conn', None)
+        if conn is None:
+            return
+        try:
+            payload = dict(obj)
+            if getattr(item, 'client_req_id', None) is not None:
+                payload['requestId'] = item.client_req_id
+            conn.sendall((json.dumps(payload) + '\n').encode('utf-8'))
+        except Exception:
+            pass
+        finally:
+            if close_after:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                try:
+                    item.client_conn = None
+                except Exception:
+                    pass
 
     def _update_item_title(self, item, title):
         item.title = title
@@ -3276,72 +3321,59 @@ class MainWindow(Gtk.Window):
                 else:
                     subs_active = bool(subs) if subs is not None else self.subs_check.get_active()
 
-                # Queue on UI thread
-                def _enqueue():
-                    # Temporarily set controls for this add
-                    prev_fmt = self.format_combo.get_active_text()
-                    prev_qual = self.quality_entry.get_text()
-                    prev_subs = self.subs_check.get_active()
+                # Create the DownloadItem synchronously so we can attach the
+                # client connection and stream progress updates back over the
+                # same socket. This avoids requiring the extension/user to
+                # poll for status.
+                try:
+                    item = DownloadItem(req['url'], req.get('title') or 'Fetching title...')
+                    item.kind = 'media'
+                    item.req_format = fmt or self.format_combo.get_active_text()
+                    item.req_quality = qual or (self.quality_entry.get_text() or "")
+                    item.req_subs = subs_active
+                    # Attach client connection and request id if present
+                    item.client_conn = conn
+                    item.client_req_id = req.get('requestId')
+                    # Append to queue and UI
+                    self.queue.append(item)
+                    item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status])
+                    threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
+                    # Start downloads if needed
+                    if self.config.get("auto_start", True) and not self.is_downloading:
+                        self.on_start_downloads(None)
+                    # Send initial queued response but keep the socket open for
+                    # streaming updates. The caller (bridge) will remain blocked
+                    # reading until we close the connection when finished.
                     try:
-                        # Apply request preferences
-                        for i, label in enumerate(["Best Video + Audio", "Audio Only", "Best (default)"]):
-                            if label == fmt:
-                                self.format_combo.set_active(i)
-                                break
-                        self.quality_entry.set_text(qual or '')
-                        self.subs_check.set_active(subs_active)
-                        # Confirmation flow
-                        if req.get('confirm'):
-                            # Bring window to front before dialog
-                            try:
-                                if req.get('show'):
-                                    self.present()
-                                    self.set_urgency_hint(True)
-                            except Exception:
-                                pass
-                            # Build confirmation dialog
-                            dlg = Gtk.MessageDialog(self, 0, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, "Start download?")
-                            title = req.get('title') or self.get_video_title(req['url']) or 'Unknown'
-                            details = f"Title: {title}\nFormat: {fmt}\nQuality: {qual or 'Best'}\nSubtitles: {'On' if subs_active else 'Off'}\n\nURL:\n{req['url']}"
-                            dlg.format_secondary_text(details)
-                            dlg.add_button("Cancel", Gtk.ResponseType.CANCEL)
-                            dlg.add_button("Start", Gtk.ResponseType.OK)
-                            resp = dlg.run()
-                            dlg.destroy()
-                            if resp != Gtk.ResponseType.OK:
-                                return
-                        # Add and maybe start
-                        self.add_url(req['url'], fmt=fmt, qual=qual, subs_active=subs_active)
-                        if not self.is_downloading:
-                            self.on_start_downloads(None)
-                        if req.get('show') and not req.get('confirm'):
-                            try:
-                                self.present()
-                                self.set_urgency_hint(True)
-                            except Exception:
-                                pass
-                    finally:
-                        # Restore UI controls (do not change user defaults)
-                        for i, label in enumerate(["Best Video + Audio", "Audio Only", "Best (default)"]):
-                            if label == prev_fmt:
-                                self.format_combo.set_active(i)
-                                break
-                        self.quality_entry.set_text(prev_qual)
-                        self.subs_check.set_active(prev_subs)
-
-                GLib.idle_add(_enqueue)
-                resp = {"status": "queued"}
+                        conn.sendall((json.dumps({"status": "queued", "requestId": item.client_req_id}) + '\n').encode('utf-8'))
+                    except Exception:
+                        # ignore send errors; we will still attempt to stream later
+                        pass
+                    resp = {"status": "queued"}
+                    # Do not close conn here; other code will write updates.
+                    return
+                except Exception as e:
+                    resp = {"status": "error", "message": str(e)}
             else:
                 resp = {"status": "error", "message": "Invalid request"}
-            conn.sendall((json.dumps(resp) + '\n').encode('utf-8'))
+            try:
+                conn.sendall((json.dumps(resp) + '\n').encode('utf-8'))
+            except Exception:
+                pass
         except Exception as e:
             try:
                 conn.sendall((json.dumps({"status": "error", "message": str(e)}) + '\n').encode('utf-8'))
             except Exception:
                 pass
         finally:
+            # If this connection wasn't attached to a DownloadItem for
+            # streaming progress, close it now. If it is attached the item
+            # lifecycle will close it when complete.
             try:
-                conn.close()
+                # check whether any queue item references this conn
+                attached = any(getattr(it, 'client_conn', None) is conn for it in self.queue)
+                if not attached:
+                    conn.close()
             except Exception:
                 pass
 

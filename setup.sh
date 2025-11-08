@@ -59,9 +59,18 @@ if [ -f "$INSTALL_DIR/icon16.png" ]; then sudo cp -f "$INSTALL_DIR/icon16.png" "
 "${AS_USER[@]}" mkdir -p "$CONFIG_DIR"
 
 "${AS_USER[@]}" mkdir -p "$(dirname "$NATIVE_CHROME")"
+# Ensure a stable extension ID: if manifest.json has no 'key', generate one
+MANIFEST_JSON="$INSTALL_DIR/manifest.json"
+if [ -f "$MANIFEST_JSON" ]; then
+  if ! grep -q '"key"' "$MANIFEST_JSON"; then
+    echo "Generating extension key for stable ID..."
+    if command -v python3 >/dev/null 2>&1; then
+      ( cd "$INSTALL_DIR" && python3 tools/generate_extension_key.py ) || true
+    fi
+  fi
+fi
 EXT_ID_INPUT=${EXT_ID:-}
 if [ -z "$EXT_ID_INPUT" ]; then
-  MANIFEST_JSON="$INSTALL_DIR/manifest.json"
   if [ -f "$MANIFEST_JSON" ]; then
     EXT_ID_INPUT=$(python3 - "$MANIFEST_JSON" <<'PY'
 import sys, json, base64, hashlib
