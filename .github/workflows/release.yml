@@ -1,0 +1,55 @@
+name: build-release
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 yt-dlp aria2 zip rsync
+      - name: Build extension zips
+        run: |
+          scripts/build.sh
+          ls -l dist
+      - name: Archive source
+        run: |
+          git archive --format=tar.gz --prefix=FastTubeDownloader-${GITHUB_REF_NAME}/ -o source.tar.gz ${GITHUB_REF}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fasttube-artifacts
+          path: |
+            dist/fasttube_chrome.zip
+            dist/fasttube_firefox.zip
+            source.tar.gz
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: fasttube-artifacts
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            fasttube_chrome.zip
+            fasttube_firefox.zip
+            source.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,12 @@
 
 Fast, extensible desktop + browser extension YouTube & generic file downloader.
 
+![screenshot](https://raw.githubusercontent.com/Dawaman43/FastTubeDownloader/main/.github/screenshot.png)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub tag](https://img.shields.io/github/v/tag/Dawaman43/FastTubeDownloader?sort=semver)](https://github.com/Dawaman43/FastTubeDownloader/tags)
+[![Build Release](https://github.com/Dawaman43/FastTubeDownloader/actions/workflows/release.yml/badge.svg)](https://github.com/Dawaman43/FastTubeDownloader/actions)
+
 ## Features
 - Desktop GTK app with queue, history, parallel downloads
 - High-speed media via yt-dlp; segmented generic downloads via aria2 (RPC optional)
@@ -19,6 +25,8 @@ Fast, extensible desktop + browser extension YouTube & generic file downloader.
 Then load the unpacked extension:
 - Chrome: chrome://extensions (Developer Mode) > Load unpacked > project root
 - Firefox: web-ext run (see Packaging below)
+
+Or download prebuilt archives from the Releases page when available.
 
 ## Stable Extension ID
 Generate and inject a key (produces a stable ID):
@@ -131,6 +139,9 @@ Notable keys:
 - aria2 absence fallback to curl/wget
 - Firefox native host installer section in setup.sh
 
+## Legal Notice
+This project provides tooling for downloading content. Ensure you comply with YouTube’s Terms of Service and local laws. You are responsible for how you use this software. The authors are not liable for misuse.
+
 ## Troubleshooting
 | Issue | Fix |
 |-------|-----|
@@ -141,3 +152,6 @@ Notable keys:
 
 ## License
 MIT (add license file if distributing).
+
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md). Friendly contributions welcome! Good first issues are labeled.
