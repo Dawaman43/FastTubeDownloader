@@ -56,10 +56,33 @@ install_rpm(){
   if have_cmd dnf; then sudo dnf install -y "$file"; elif have_cmd rpm; then sudo rpm -i "$file"; else err "No RPM installer found"; fi
 }
 
+fetch_tarball(){
+  # Try latest release tarball, else fall back to main branch tarball
+  local url
+  url=$(curl -s "$API" | grep '"tarball_url"' | head -n1 | cut -d '"' -f4 || true)
+  if [[ -z "$url" ]]; then
+    url="https://api.github.com/repos/${REPO}/tarball/main"
+  fi
+  echo "$url"
+}
+
 local_install(){
-  log "Falling back to local install (rsync into /opt)"
-  if [[ ! -f setup.sh ]]; then err "Run from project root (setup.sh missing)."; exit 1; fi
-  sudo bash setup.sh
+  log "No native package asset found; installing from source tarball"
+  local tar_url tar_file extract_dir top
+  tar_url=$(fetch_tarball)
+  tar_file="$TMP_DIR/src.tar.gz"
+  if [[ -z "$tar_url" ]]; then
+    err "Unable to determine source tarball URL."; exit 1
+  fi
+  log "Downloading source: $tar_url"
+  curl -L "$tar_url" -o "$tar_file"
+  log "Extracting..."
+  mkdir -p "$TMP_DIR/src"
+  tar -xzf "$tar_file" -C "$TMP_DIR/src"
+  top=$(find "$TMP_DIR/src" -maxdepth 1 -mindepth 1 -type d | head -n1)
+  if [[ -z "$top" ]]; then err "Extraction failed."; exit 1; fi
+  log "Running setup.sh from $top"
+  ( cd "$top" && sudo bash setup.sh )
 }
 
 show_post(){
