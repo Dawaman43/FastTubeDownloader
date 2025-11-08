@@ -28,6 +28,30 @@ Then load the unpacked extension:
 
 Or download prebuilt archives from the Releases page when available.
 
+### Easy Binary Install (Deb/RPM)
+If you just want the app installed without building anything, download the latest prebuilt package from the GitHub Releases page and install with one or two commands.
+
+Debian / Ubuntu (.deb):
+```bash
+wget -O fasttube.deb https://github.com/Dawaman43/FastTubeDownloader/releases/latest/download/fasttube-downloader_amd64.deb
+sudo apt install ./fasttube.deb
+```
+
+Fedora / RHEL / openSUSE (RPM):
+```bash
+wget -O fasttube.rpm https://github.com/Dawaman43/FastTubeDownloader/releases/latest/download/fasttube-downloader.x86_64.rpm
+sudo rpm -i fasttube.rpm
+```
+
+That’s it—no need to run the packaging build steps. The package installs:
+- Desktop app under /opt (or distro-appropriate paths)
+- Native messaging host file
+- Icon + desktop launcher
+
+Then load the browser extension either from `dist/` (build with `scripts/build.sh`) or use the extension zip assets from the same Release.
+
+If asset names differ (e.g., versioned filenames), adjust the commands to match what you see on the Release page.
+
 ## Stable Extension ID
 Generate and inject a key (produces a stable ID):
 ```bash
