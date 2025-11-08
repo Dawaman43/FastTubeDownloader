@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+.env
+.venv*/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node/web
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/dist/
+/.tmp_ext_build/
+*.zip
+
+# VS Code/IDE
+.vscode/
+.idea/
+
+# Local dev keys (DO NOT COMMIT PRIVATE KEYS)
+/dev_keys/
+*.pem
+
+# Logs
+*.log
+.cache/

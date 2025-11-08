@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "FastTube Downloader",
+  "version": "1.0",
+  "description": "Download YouTube videos fast",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwnwnCoH/NxzDdAnSwi1KaOScmfnLI/VScSeCAv61nKoVV0HEnTVzSJO91B61Ts6Tb4PiJqpZci7P1+BHZzJCF8RDjIgdsDMIg2BLv6P5yyK5AgAkJShtbMDQgVMHPbl4L9YiFPX+h8kieuF0K5DX5nhHmTSB8JMjDXxbT2WdqshMOdo4PkoxKDRH1owR4y/cAhbtqMMEgreN4EavIlzc32EKyngPj1se4jueMTBSNNMyVQdcMTwsRezWnWdLJWqEY9r1lvTTtmG29dhUYEhh74+TJ+lr5hoW1fnjjSgzFR7NQV5rNjVa2KaYXrQY8j/JlZtPXxK5Hjfx/ZMdRnW8pQIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "downloads",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "http://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://*.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "http://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://*.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

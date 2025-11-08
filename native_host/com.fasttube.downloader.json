@@ -1,0 +1,7 @@
+{
+  "name": "com.fasttube.downloader",
+  "description": "Native host for FastTube Downloader",
+  "path": "/opt/FastTubeDownloader/native_host/bridge.py",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://gifdkhjpnkiaekcagnehmolkpndfohke/"]
+}

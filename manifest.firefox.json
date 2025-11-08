@@ -1,0 +1,41 @@
+{
+  "manifest_version": 2,
+  "name": "FastTube Downloader",
+  "version": "1.0",
+  "description": "Download YouTube videos fast",
+  "applications": {
+    "gecko": {
+      "id": "fasttube@local",
+      "strict_min_version": "91.0"
+    }
+  },
+  "permissions": [
+    "nativeMessaging",
+    "downloads",
+    "activeTab",
+    "storage"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
