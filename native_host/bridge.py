@@ -10,6 +10,16 @@ import os
 
 HOST = '127.0.0.1'
 PORT = 47653
+LAUNCH_RETRY_SECONDS = 15.0  # extended to allow slower GUI startup
+LOG_PATH = os.environ.get('FASTTUBE_BRIDGE_LOG', '/tmp/fasttube-bridge.log')
+
+def _log(msg: str):
+    try:
+        with open(LOG_PATH, 'a') as f:
+            ts = time.strftime('%Y-%m-%d %H:%M:%S')
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
 
 
 def send_native_message(msg: dict):
@@ -17,21 +27,28 @@ def send_native_message(msg: dict):
     sys.stdout.buffer.write(struct.pack('<I', len(data)))
     sys.stdout.buffer.write(data)
     sys.stdout.flush()
+    _log(f"sent {msg.get('status','?')} len={len(data)}")
 
 
 def read_native_message():
     raw_len = sys.stdin.buffer.read(4)
     if not raw_len or len(raw_len) < 4:
+        _log('no header; stdin closed')
         return None
     (msg_len,) = struct.unpack('<I', raw_len)
     if msg_len == 0:
+        _log('zero-length message')
         return None
     data = sys.stdin.buffer.read(msg_len)
     if not data:
+        _log('no body read')
         return None
     try:
-        return json.loads(data.decode('utf-8'))
+        obj = json.loads(data.decode('utf-8'))
+        _log(f"recv action={obj.get('action')} url={bool(obj.get('url'))}")
+        return obj
     except Exception:
+        _log('json decode error')
         return None
 
 
@@ -41,41 +58,47 @@ def _connect_and_send(payload: dict, timeout: float = 2.0):
     last = None
     try:
         s = socket.create_connection((HOST, PORT), timeout=timeout)
-        try:
-            s.sendall((json.dumps(payload) + '\n').encode('utf-8'))
-            # Read repeatedly until the GUI closes the connection. Each line is
-            # expected to be a JSON object followed by a newline. Forward each
-            # parsed object to the browser extension via native messaging.
-            s.settimeout(0.5)
-            buf = b''
-            while True:
-                try:
-                    chunk = s.recv(4096)
-                    if not chunk:
-                        break
-                    buf += chunk
-                    while b'\n' in buf:
-                        line, buf = buf.split(b'\n', 1)
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            obj = json.loads(line.decode('utf-8'))
-                            last = obj
-                            send_native_message(obj)
-                        except Exception:
-                            # ignore malformed lines
-                            pass
-                except socket.timeout:
-                    # continue reading until closed
-                    continue
-        finally:
+    except Exception as e:
+        _log(f"connect GUI failed: {e}")
+        raise
+    try:
+        s.sendall((json.dumps(payload) + '\n').encode('utf-8'))
+        _log('sent payload to GUI')
+        # Read repeatedly until the GUI closes the connection. Each line is
+        # expected to be a JSON object followed by a newline. Forward each
+        # parsed object to the browser extension via native messaging.
+        s.settimeout(0.5)
+        buf = b''
+        while True:
             try:
-                s.close()
-            except Exception:
-                pass
-    except Exception:
-        pass
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                buf += chunk
+                while b'\n' in buf:
+                    line, buf = buf.split(b'\n', 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line.decode('utf-8'))
+                        last = obj
+                        send_native_message(obj)
+                        _log(f"forwarded from GUI: {obj.get('status')}")
+                    except Exception:
+                        # ignore malformed lines
+                        pass
+            except socket.timeout:
+                # continue reading until closed
+                continue
+            except Exception as e:
+                _log(f"recv error: {e}")
+                raise
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
     return last or {"status": "queued"}
 
 def _retry_connect(payload: dict, total_wait: float = 5.0):
@@ -111,23 +134,51 @@ def forward_to_gui(payload: dict) -> dict:
         except Exception:
             pass
         # Server is up; use the streaming helper
+        _log('GUI reachable; streaming')
         return _connect_and_send(payload, timeout=0.2)
     except Exception:
         # Not reachable; try to launch the GUI
         try:
             launcher = '/usr/bin/fasttube-downloader'
+            launched = False
+            env = os.environ.copy()
+            if not env.get('DISPLAY'):
+                env['DISPLAY'] = ':0'
+            if not env.get('XDG_RUNTIME_DIR'):
+                uid = os.getuid()
+                candidate = f"/run/user/{uid}"
+                if os.path.isdir(candidate):
+                    env['XDG_RUNTIME_DIR'] = candidate
+            _log(f"launch env DISPLAY={env.get('DISPLAY')} XDG_RUNTIME_DIR={env.get('XDG_RUNTIME_DIR')}")
+
             if os.path.exists(launcher) and os.access(launcher, os.X_OK):
-                subprocess.Popen([launcher], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                try:
+                    subprocess.Popen([launcher], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, env=env)
+                    launched = True
+                except Exception as e:
+                    _log(f"launcher exec failed: {e}")
+                    return {"status": "error", "message": f"Launcher exec failed: {e}"}
             else:
                 # Fallback to running from source tree (development mode)
                 script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 gui_path = os.path.join(script_dir, 'gui', 'main_window.py')
-                subprocess.Popen(['python3', gui_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                try:
+                    subprocess.Popen(['python3', gui_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, env=env)
+                    launched = True
+                except Exception as e:
+                    _log(f"GUI launch failed: {e}")
+                    return {"status": "error", "message": f"GUI launch failed: {e}"}
 
-            # After launching, wait a bit and retry connecting
-            return _retry_connect(payload, total_wait=6.0)
+            # Send early status so extension can surface feedback
+            if launched:
+                _log('GUI launching...')
+                send_native_message({"status": "launching"})
+            # After launching, wait a bit longer and retry connecting
+            _log(f"retrying connect for up to {LAUNCH_RETRY_SECONDS}s")
+            return _retry_connect(payload, total_wait=LAUNCH_RETRY_SECONDS)
         except Exception as e:
-            return {"status": "error", "message": f"GUI launch failed: {e}"}
+            _log(f"GUI launch wrapper failed: {e}")
+            return {"status": "error", "message": f"GUI launch wrapper failed: {e}"}
 
 
 def main():
@@ -135,9 +186,13 @@ def main():
         req = read_native_message()
         if req is None:
             break
+        _log(f"handling action={req.get('action')}")
         if not isinstance(req, dict):
             send_native_message({"status": "error", "message": "Invalid request"})
             continue
+        if not req.get('action') and req.get('url'):
+            req['action'] = 'enqueue'
+            _log('action missing; defaulting to enqueue')
         # Handle probe request via yt-dlp JSON output
         if req.get('action') == 'probe' and req.get('url'):
             try:
@@ -177,6 +232,7 @@ def main():
                     })
                 send_native_message({ 'status': 'ok', 'qualities': qualities, 'audio_only': audio_only, 'formats': fmt_list })
             except Exception as e:
+                _log(f"probe error: {e}")
                 send_native_message({ 'status': 'error', 'message': str(e) })
             continue
 
@@ -195,7 +251,9 @@ def main():
         if not payload['url']:
             send_native_message({"status": "error", "message": "No URL"})
             continue
+        _log('forwarding to GUI...')
         result = forward_to_gui(payload)
+        _log(f"forward result: {result.get('status')}")
         send_native_message(result)
 
 

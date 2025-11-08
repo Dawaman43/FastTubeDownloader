@@ -61,6 +61,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Merge options with storage defaults
     chrome.storage.sync.get(['format', 'quality', 'subs'], (prefs) => {
       const message = {
+        action: 'enqueue',
         url: request.url,
         title: request.title,
         // Prefer explicit formatId; map to bridge.py expects 'formatId'

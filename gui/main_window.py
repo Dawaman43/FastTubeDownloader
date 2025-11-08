@@ -838,6 +838,7 @@ class MainWindow(Gtk.Window):
         item = DownloadItem(url, "Fetching title...")
         item.kind = 'media'
         item.req_format = fmt or self.format_combo.get_active_text()
+        print(f"[GUI] queued media URL {url}", file=sys.stderr)
         item.req_quality = qual or (self.quality_entry.get_text() or "")
         if subs_active is None:
             subs_active = self.subs_check.get_active()
@@ -1147,19 +1148,31 @@ class MainWindow(Gtk.Window):
 
     def _handle_client(self, conn):
         try:
-            data = b''
-            while True:
-                chunk = conn.recv(4096)
+            # Read only the first JSON line so the connection stays open for streaming progress updates.
+            conn.settimeout(5.0)
+            buf = b''
+            while b'\n' not in buf and len(buf) < 65536:
+                try:
+                    chunk = conn.recv(4096)
+                except socket.timeout:
+                    break
                 if not chunk:
                     break
-                data += chunk
-            text = data.decode('utf-8', errors='ignore').strip()
-            if not text:
+                buf += chunk
+            conn.settimeout(None)
+            if not buf:
+                return
+            if b'\n' in buf:
+                line_bytes = buf.split(b'\n', 1)[0]
+            else:
+                line_bytes = buf
+            line = line_bytes.decode('utf-8', errors='ignore').strip()
+            if not line:
                 return
             try:
-                req = json.loads(text.splitlines()[0])
+                req = json.loads(line)
             except Exception:
-                req = {"action": "enqueue", "url": text}
+                req = {"action": "enqueue", "url": line}
             if req.get('action') == 'show':
                 def _bring():
                     try:
@@ -3338,6 +3351,7 @@ class MainWindow(Gtk.Window):
                     self.queue.append(item)
                     item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status])
                     threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
+                    print(f"[GUI] accepted enqueue from native host: {req['url']}", file=sys.stderr)
                     # Start downloads if needed
                     if self.config.get("auto_start", True) and not self.is_downloading:
                         self.on_start_downloads(None)
@@ -3396,6 +3410,7 @@ class MainWindow(Gtk.Window):
             ]
             print(f"Running cmd: {' '.join(cmd)}")  # Debug
             try:
+                print(f"[GUI] spawn fast_ytdl: {' '.join(cmd)}", file=sys.stderr)
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True)
                 item.process = proc
                 for line in iter(proc.stdout.readline, ""):
@@ -3531,6 +3546,7 @@ class MainWindow(Gtk.Window):
                 GLib.idle_add(self._remove_big_row, it)
                 self.append_history(it.title, it.url, "Failed", it.dest_path or "")
         try:
+            print(f"[GUI] spawn fast_ytdl: {' '.join(cmd)}", file=sys.stderr)
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True)
             item.process = proc
             threading.Thread(target=_reader, args=(proc, item), daemon=True).start()
