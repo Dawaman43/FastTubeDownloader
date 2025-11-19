@@ -1,16 +1,163 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>FastTube Downloads</title>
-  <style>
-    body { width: 300px; padding: 10px; font-family: Arial; }
-    .download { border: 1px solid #ccc; margin: 5px 0; padding: 5px; }
-    progress { width: 100%; }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FastTube Downloader</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h3>Downloads</h3>
-  <div id="downloads-list"></div>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-content">
+      <div class="header-title">
+        <div class="icon"></div>
+        <span>FastTube Downloader</span>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" id="refresh-btn" title="Refresh">⟳</button>
+        <button class="header-btn" id="settings-btn" title="Settings">⚙</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="active">
+      Active
+      <span class="badge" id="active-count">0</span>
+    </button>
+    <button class="tab" data-tab="history">History</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </div>
+
+  <!-- Active Downloads Tab -->
+  <div class="tab-content active" id="active-tab">
+    <div id="native-error-container"></div>
+    <div id="active-downloads">
+      <!-- Downloads will be dynamically added here -->
+    </div>
+  </div>
+
+  <!-- History Tab -->
+  <div class="tab-content" id="history-tab">
+    <div class="search-bar">
+      <input type="text" class="search-input" id="history-search" placeholder="Search history...">
+    </div>
+    <div id="history-list">
+      <!-- History items will be dynamically added here -->
+    </div>
+  </div>
+
+  <!-- Settings Tab -->
+  <div class="tab-content" id="settings-tab">
+    <!-- Download Settings -->
+    <div class="settings-section">
+      <div class="settings-header">Download Settings</div>
+      
+      <div class="setting-item">
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Enable Notifications</div>
+            <div class="setting-description">Show desktop notifications when downloads complete</div>
+          </div>
+          <div class="toggle-switch" id="toggle-notifications">
+            <div class="toggle-slider"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Auto-start Downloads</div>
+            <div class="setting-description">Begin downloading immediately without confirmation</div>
+          </div>
+          <div class="toggle-switch active" id="toggle-autostart">
+            <div class="toggle-slider"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Sound Notifications</div>
+            <div class="setting-description">Play sound when downloads finish</div>
+          </div>
+          <div class="toggle-switch"  id="toggle-sounds">
+            <div class="toggle-slider"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <div class="input-group">
+          <label class="input-label">Simultaneous Downloads</label>
+          <select class="input-control" id="max-downloads">
+            <option value="1">1 download</option>
+            <option value="2">2 downloads</option>
+            <option value="3" selected>3 downloads</option>
+            <option value="5">5 downloads</option>
+            <option value="10">10 downloads</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Default Format Settings -->
+    <div class="settings-section">
+      <div class="settings-header">Default Format</div>
+      
+      <div class="setting-item">
+        <div class="input-group">
+          <label class="input-label">Video Format</label>
+          <select class="input-control" id="default-format">
+            <option value="Best Video + Audio">Best Video + Audio</option>
+            <option value="Audio Only">Audio Only</option>
+            <option value="Best (default)">Best (default)</option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Default Quality</label>
+          <select class="input-control" id="default-quality">
+            <option value="">Best Available</option>
+            <option value="2160">2160p (4K)</option>
+            <option value="1440">1440p (2K)</option>
+            <option value="1080">1080p (Full HD)</option>
+            <option value="720">720p (HD)</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+          </select>
+        </div>
+
+        <div class="setting-row" style="margin-top: 12px;">
+          <div>
+            <div class="setting-label">Download Subtitles</div>
+            <div class="setting-description">Include subtitles by default</div>
+          </div>
+          <div class="toggle-switch active" id="toggle-subtitles">
+            <div class="toggle-slider"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div class="settings-section">
+      <div class="settings-header">About</div>
+      <div class="setting-item">
+        <div class="setting-label">FastTube Downloader</div>
+        <div class="setting-description">Version 2.0</div>
+        <div class="setting-description" style="margin-top: 8px;">
+          Fast, extensible YouTube & media downloader with IDM-inspired interface
+        </div>
+        <button class="btn btn-secondary mt-2" id="clear-history">Clear History</button>
+      </div>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

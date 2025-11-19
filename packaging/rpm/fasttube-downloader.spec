@@ -1,5 +1,5 @@
 Name:           fasttube-downloader
-Version:        0.1.0
+Version:        2.1
 Release:        1%{?dist}
 Summary:        FastTube Downloader – YouTube & generic file downloader
 License:        MIT
@@ -39,5 +39,5 @@ gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
 /usr/share/icons/hicolor/*/apps/fasttube-downloader.png
 
 %changelog
-* Thu Nov 08 2025 FastTube Downloader <maintainer@example.com> - 0.1.0-1
+* Wed Nov 19 2025 FastTube Downloader <maintainer@example.com> - 2.1-1
 - Initial package

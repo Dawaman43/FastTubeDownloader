@@ -261,14 +261,18 @@ class MainWindow(Gtk.Window):
         self.url_entry = Gtk.Entry(placeholder_text="Paste YouTube URL here...")
         self.url_entry.set_hexpand(True)
         add_btn = Gtk.Button(label="Add to Queue")
+        add_btn.get_style_context().add_class("suggested-action")
         add_btn.connect("clicked", self.on_add_download)
         start_btn = Gtk.Button(label="Start Downloads")
+        start_btn.get_style_context().add_class("suggested-action")
         start_btn.connect("clicked", self.on_start_downloads)
         stop_btn = Gtk.Button(label="Stop")
         stop_btn.connect("clicked", self.on_stop_downloads)
         clear_btn = Gtk.Button(label="Clear Queue")
+        clear_btn.get_style_context().add_class("destructive-action")
         clear_btn.connect("clicked", self.clear_queue)
         remove_btn = Gtk.Button(label="Remove Selected")
+        remove_btn.get_style_context().add_class("destructive-action")
         remove_btn.connect("clicked", self.on_remove_selected)
         pause_btn = Gtk.Button(label="Pause Selected")
         pause_btn.connect("clicked", self.on_pause_selected)
@@ -359,7 +363,7 @@ class MainWindow(Gtk.Window):
         sc_settings.set_min_content_height(70)
         queue_page.pack_start(sc_settings, False, False, 0)
 
-        self.liststore = Gtk.ListStore(str, str, int, str, str)
+        self.liststore = Gtk.ListStore(str, str, int, str, str, str, str, str)
         self.treeview = Gtk.TreeView(model=self.liststore)
         self.treeview.set_rules_hint(True)
         title_renderer = Gtk.CellRendererText()
@@ -368,20 +372,44 @@ class MainWindow(Gtk.Window):
         except Exception:
             pass
         title_col = Gtk.TreeViewColumn(title="Title")
+        title_col.set_resizable(True)
+        title_col.set_min_width(200)
         title_col.pack_start(title_renderer, True)
         title_col.add_attribute(title_renderer, 'text', 1)
         self.treeview.append_column(title_col)
+        
         prog_renderer = Gtk.CellRendererProgress()
         prog_col = Gtk.TreeViewColumn(title="Progress")
+        prog_col.set_min_width(120)
         prog_col.pack_start(prog_renderer, True)
         prog_col.add_attribute(prog_renderer, 'value', 2)
         prog_col.add_attribute(prog_renderer, 'text', 3)
         self.treeview.append_column(prog_col)
+        
         status_renderer = Gtk.CellRendererText()
         status_col = Gtk.TreeViewColumn(title="Status")
+        status_col.set_min_width(100)
         status_col.pack_start(status_renderer, True)
-        status_col.add_attribute(status_renderer, 'text', 4)
+        status_col.set_cell_data_func(status_renderer, self._status_cell_data_func)
         self.treeview.append_column(status_col)
+
+        speed_renderer = Gtk.CellRendererText()
+        speed_col = Gtk.TreeViewColumn(title="Speed")
+        speed_col.pack_start(speed_renderer, True)
+        speed_col.add_attribute(speed_renderer, 'text', 5)
+        self.treeview.append_column(speed_col)
+
+        eta_renderer = Gtk.CellRendererText()
+        eta_col = Gtk.TreeViewColumn(title="ETA")
+        eta_col.pack_start(eta_renderer, True)
+        eta_col.add_attribute(eta_renderer, 'text', 6)
+        self.treeview.append_column(eta_col)
+
+        size_renderer = Gtk.CellRendererText()
+        size_col = Gtk.TreeViewColumn(title="Size")
+        size_col.pack_start(size_renderer, True)
+        size_col.add_attribute(size_renderer, 'text', 7)
+        self.treeview.append_column(size_col)
         scrolled = Gtk.ScrolledWindow()
         scrolled.add(self.treeview)
         queue_page.pack_start(scrolled, True, True, 0)
@@ -565,31 +593,7 @@ class MainWindow(Gtk.Window):
             self._clamp_checks_left = 0
         GLib.timeout_add(200, self._clamp_window_size_periodic)
         self.update_dashboard_counts()
-        css = Gtk.CssProvider()
-        css_data = b"""
-        .fasttube-header { font-weight:600; font-size:14px; color:#f0f3f7; }
-        window, .settings-strip { background: #121417; }
-        .settings-strip { padding:10px 12px; border-top:1px solid #1f2327; border-bottom:1px solid #1f2327; }
-        .settings-strip label { color:#c3ced9; font-size:12px; }
-        treeview { background:#181b1f; color:#dce5ef; }
-        treeview.view row:selected { background: linear-gradient(90deg,#263547,#1d2833); color:#ffffff; }
-        treeview.view row:hover { background:#202830; }
-        progressbar { min-height:18px; }
-        progressbar trough { background:#1d242b; border-radius:6px; }
-        progressbar progress { background: linear-gradient(90deg,#2d9f4e,#37c964); border-radius:6px; }
-        button { background:#1e252c; color:#d0dae4; border:1px solid #2a323a; border-radius:6px; padding:4px 10px; }
-        button:hover { background:#27323b; }
-        button:active { background:#31404c; }
-        headerbar { background:#161a1e; border-bottom:1px solid #242b31; }
-        headerbar button { background:#232a31; }
-        headerbar button:hover { background:#2d3740; }
-        .mini-popup { background:#1e242a; color:#e7eff7; }
-        """
-        try:
-            css.load_from_data(css_data)
-            Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_USER)
-        except Exception:
-            pass
+        # CSS styling is now applied later in build_ui() at line ~2650
         GLib.timeout_add(450, self._pulse_progress_rows)
         threading.Thread(target=self._start_control_server, daemon=True).start()
         self.connect("configure-event", self._on_configure)
@@ -597,6 +601,20 @@ class MainWindow(Gtk.Window):
             self.on_format_changed(self.format_combo)
         except Exception:
             pass
+
+    def _status_cell_data_func(self, column, cell, model, iter, data):
+        status = model.get_value(iter, 4)
+        cell.set_property('text', status)
+        if status == 'Downloading...':
+            cell.set_property('foreground', '#3d8bfd')
+        elif status == 'Completed':
+            cell.set_property('foreground', '#28a745')
+        elif status == 'Paused':
+            cell.set_property('foreground', '#ffc107')
+        elif 'Error' in status or 'Failed' in status:
+            cell.set_property('foreground', '#dc3545')
+        else:
+            cell.set_property('foreground', '#a8b3c1')
 
     def on_format_changed(self, combo):
         try:
@@ -842,7 +860,7 @@ class MainWindow(Gtk.Window):
             subs_active = self.subs_check.get_active()
         item.req_subs = subs_active
         self.queue.append(item)
-        item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status])
+        item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
         threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
         if self.config.get("auto_start", True) and not self.is_downloading:
             self.on_start_downloads(None)
@@ -878,7 +896,7 @@ class MainWindow(Gtk.Window):
                 item = DownloadItem(full_url, "Fetching title...")
                 item.kind = 'media'
                 self.queue.append(item)
-                item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status])
+                item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
                 threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
                 added += 1
             if self.config.get("auto_start", True) and not self.is_downloading:
@@ -945,7 +963,7 @@ class MainWindow(Gtk.Window):
         item.kind = 'generic'
         item.req_format = 'Generic File'
         self.queue.append(item)
-        item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status])
+        item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
         threading.Thread(target=self._probe_generic_metadata, args=(item,), daemon=True).start()
         if self.config.get("auto_start", True) and not self.is_downloading:
             self.on_start_downloads(None)
@@ -1338,6 +1356,18 @@ class MainWindow(Gtk.Window):
     def _start_item_download(self, item):
         self._set_status(item, "Downloading...")
         folder = os.path.expanduser(self.config["download_folder"])
+        
+        # Create playlist subfolder if this item is part of a playlist
+        if getattr(item, 'playlist_name', None):
+            try:
+                playlist_folder = os.path.join(folder, item.playlist_name)
+                os.makedirs(playlist_folder, exist_ok=True)
+                folder = playlist_folder
+                print(f"[GUI] Downloading to playlist folder: {folder}", file=sys.stderr)
+            except Exception as e:
+                print(f"[GUI] Failed to create playlist folder: {e}", file=sys.stderr)
+        
+        # Categorize generic items by extension if in idm mode
         if getattr(item, 'kind', 'media') == 'generic' and self.config.get('category_mode','idm') == 'idm':
             try:
                 subdir = self._categorize_generic(item.url)
@@ -1468,11 +1498,60 @@ class MainWindow(Gtk.Window):
                 msg = "Warning"
             self._set_status(item, f"Warning: {msg}")
             GLib.idle_add(self._add_or_update_big_row, item)
+        if line.startswith("META:"):
+            try:
+                parts = line.split(":", 1)[1].strip().split()
+                for p in parts:
+                    if '=' in p:
+                        k, v = p.split('=', 1)
+                        if k == 'speed': item.speed = v
+                        elif k == 'eta': item.eta = v
+                        elif k == 'total': item.total = v
+                        elif k == 'downloaded': item.downloaded = v
+                # Trigger update
+                self._update_item_progress(item, item.progress)
+            except Exception:
+                pass
+            return
         if line.startswith("PROGRESS:"):
             try:
                 pct_str = line.split(":", 1)[1].strip().rstrip("% ")
                 pct = float(pct_str)
                 self._update_item_progress(item, int(pct))
+                return
+            except Exception:
+                pass
+        if line.startswith("[download]"):
+            try:
+                # Standard yt-dlp output: [download]  12.3% of 10.00MiB at 1.23MiB/s ETA 00:05
+                parts = line.split()
+                pct = 0
+                for p in parts:
+                    if '%' in p:
+                        try:
+                            pct = float(p.rstrip('%'))
+                            break
+                        except: pass
+                if pct > 0:
+                    if 'at' in parts:
+                        try:
+                            idx = parts.index('at')
+                            if idx + 1 < len(parts):
+                                item.speed = parts[idx+1]
+                        except: pass
+                    if 'ETA' in parts:
+                        try:
+                            idx = parts.index('ETA')
+                            if idx + 1 < len(parts):
+                                item.eta = parts[idx+1]
+                        except: pass
+                    if 'of' in parts:
+                        try:
+                            idx = parts.index('of')
+                            if idx + 1 < len(parts):
+                                item.total = parts[idx+1]
+                        except: pass
+                    self._update_item_progress(item, int(pct))
                 return
             except Exception:
                 pass
@@ -1540,9 +1619,9 @@ class MainWindow(Gtk.Window):
                     total_i = int(total) if total.isdigit() else 0
                     if total_i > 0:
                         pct = int((comp_i/total_i)*100)
-                        self._update_item_progress(item, pct)
                         item.downloaded = self._human_bytes(self._bytes_to_str(comp_i))
                         item.total = self._human_bytes(self._bytes_to_str(total_i))
+                        self._update_item_progress(item, pct)
                 except Exception:
                     pass
                 spd = st.get('downloadSpeed')
@@ -1577,7 +1656,8 @@ class MainWindow(Gtk.Window):
         if item.treeiter is None:
             return
         dots = '.' * ((progress // 5) % 3 + 1)
-        GLib.idle_add(self.liststore.set, item.treeiter, 2, int(progress))
+        size_str = f"{item.downloaded}/{item.total}" if item.total else item.downloaded
+        GLib.idle_add(self.liststore.set, item.treeiter, 2, int(progress), 5, item.speed or "", 6, item.eta or "", 7, size_str or "")
         self._update_progress_text(item)
         # Stream progress to native client if attached
         try:
@@ -2004,6 +2084,12 @@ class MainWindow(Gtk.Window):
         row['status'].set_text(self._compose_progress_summary(item))
         row['bar'].set_fraction(max(0.0, min(1.0, (item.progress or 0)/100.0)))
         row['bar'].set_text(f"{int(item.progress or 0)}%")
+        
+        if item.status == "Downloading...":
+            row['bar'].get_style_context().add_class("pulse")
+        else:
+            row['bar'].get_style_context().remove_class("pulse")
+
         running = bool(item.process and item.process.poll() is None)
         row['pause'].set_sensitive(running)
         row['resume'].set_sensitive(not running)
@@ -2635,26 +2721,361 @@ class MainWindow(Gtk.Window):
         GLib.timeout_add(200, self._clamp_window_size_periodic)
         # Safe to update counts now
         self.update_dashboard_counts()
-        # Inject custom CSS for styling
+        # Inject custom CSS for IDM-style styling
         css = Gtk.CssProvider()
         css_data = b"""
-        .fasttube-header { font-weight:600; font-size:14px; color:#f0f3f7; }
-        window, .settings-strip { background: #121417; }
-        .settings-strip { padding:10px 12px; border-top:1px solid #1f2327; border-bottom:1px solid #1f2327; }
-        .settings-strip label { color:#c3ced9; font-size:12px; }
-        treeview { background:#181b1f; color:#dce5ef; }
-        treeview.view row:selected { background: linear-gradient(90deg,#263547,#1d2833); color:#ffffff; }
-        treeview.view row:hover { background:#202830; }
-        progressbar { min-height:18px; }
-        progressbar trough { background:#1d242b; border-radius:6px; }
-        progressbar progress { background: linear-gradient(90deg,#2d9f4e,#37c964); border-radius:6px; }
-        button { background:#1e252c; color:#d0dae4; border:1px solid #2a323a; border-radius:6px; padding:4px 10px; }
-        button:hover { background:#27323b; }
-        button:active { background:#31404c; }
-        headerbar { background:#161a1e; border-bottom:1px solid #242b31; }
-        headerbar button { background:#232a31; }
-        headerbar button:hover { background:#2d3740; }
-        .mini-popup { background:#1e242a; color:#e7eff7; }
+        /* ========================================
+           FastTube Downloader - IDM-Style Theme
+           Matching Chrome Extension Design
+           ======================================== */
+        
+        /* Color Variables (matching popup.css) */
+        /* Primary: #0d6efd, #0b5ed7, #3d8bfd */
+        /* Success: #28a745 | Warning: #ffc107 | Danger: #dc3545 */
+        /* Backgrounds: #1a1d23, #23262d, #2b2f36, #32363e */
+        /* Text: #e8eef4, #a8b3c1, #6c757d */
+        /* Borders: #3a3e47, #4a4e57 */
+        
+        /* ========== Main Window ========== */
+        window { 
+            background: #1a1d23;
+            color: #e8eef4;
+        }
+        
+        /* ========== Header Bar ========== */
+        headerbar { 
+            background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%); 
+            border-bottom: 2px solid #0b5ed7;
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        headerbar button { 
+            background: rgba(255, 255, 255, 0.12); 
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-weight: 600;
+            transition: all 200ms ease;
+        }
+        headerbar button:hover { 
+            background: rgba(255, 255, 255, 0.22);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        headerbar button:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* ========== FastTube Header Section ========== */
+        .fasttube-header { 
+            font-weight: 600; 
+            font-size: 14px; 
+            color: #e8eef4;
+            letter-spacing: 0.3px;
+        }
+        
+        /* ========== Settings Strip ========== */
+        .settings-strip { 
+            padding: 14px 16px; 
+            border-top: 1px solid #2a2e35; 
+            border-bottom: 1px solid #2a2e35;
+            background: #23262d;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+        }
+        .settings-strip label { 
+            color: #a8b3c1; 
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        /* ========== TreeView - Downloads List ========== */
+        treeview { 
+            background: #23262d; 
+            color: #e8eef4;
+            border-radius: 8px;
+        }
+        treeview.view { 
+            background: #23262d;
+            border-radius: 8px;
+        }
+        treeview.view row { 
+            padding: 8px 4px;
+            border-bottom: 1px solid #2a2e35;
+            transition: all 150ms ease;
+        }
+        treeview.view row:selected { 
+            background: linear-gradient(90deg, #0d6efd 0%, #0b5ed7 100%); 
+            color: #ffffff;
+            box-shadow: 0 2px 4px rgba(13, 110, 253, 0.3);
+        }
+        treeview.view row:hover { 
+            background: #2b2f36;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        treeview.view row:selected:hover {
+            background: linear-gradient(90deg, #3d8bfd 0%, #0d6efd 100%);
+        }
+        treeview header button {
+            background: #2b2f36;
+            color: #a8b3c1;
+            border: 1px solid #3a3e47;
+            border-radius: 0;
+            padding: 8px 12px;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        treeview header button:hover {
+            background: #32363e;
+            color: #e8eef4;
+        }
+        
+        /* ========== Progress Bars ========== */
+        progressbar { 
+            min-height: 22px;
+            border-radius: 8px;
+        }
+        progressbar trough { 
+            background: #1a1d23; 
+            border: 1px solid #2a2e35;
+            border-radius: 8px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        progressbar progress { 
+            background: linear-gradient(90deg, #0d6efd 0%, #3d8bfd 100%); 
+            border-radius: 7px;
+            box-shadow: 0 1px 3px rgba(13, 110, 253, 0.4);
+        }
+        /* Pulsing effect for active downloads */
+        progressbar.pulse progress {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        /* ========== Buttons ========== */
+        button { 
+            background: #2d3139; 
+            color: #e8eef4; 
+            border: 1px solid #3a4048; 
+            border-radius: 6px; 
+            padding: 8px 14px;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 150ms ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        button:hover { 
+            background: #363c46; 
+            border-color: #4a4e57;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transform: translateY(-1px);
+        }
+        button:active { 
+            background: #3d4350; 
+            transform: translateY(0);
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Primary action buttons (Add, Start, etc.) */
+        button.suggested-action {
+            background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 2px 6px rgba(13, 110, 253, 0.3);
+        }
+        button.suggested-action:hover {
+            background: linear-gradient(135deg, #3d8bfd 0%, #0d6efd 100%);
+            box-shadow: 0 3px 8px rgba(13, 110, 253, 0.4);
+            transform: translateY(-1px);
+        }
+        button.suggested-action:active {
+            background: linear-gradient(135deg, #0b5ed7 0%, #0a52c7 100%);
+            transform: translateY(0);
+        }
+        
+        /* Danger/Remove buttons */
+        button.destructive-action {
+            background: transparent;
+            color: #dc3545;
+            border: 1px solid #dc3545;
+        }
+        button.destructive-action:hover {
+            background: #dc3545;
+            color: #ffffff;
+            box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+        }
+        
+        /* ========== Notebook Tabs ========== */
+        notebook { 
+            background: #1a1d23;
+        }
+        notebook > header {
+            background: #23262d;
+            border-bottom: 2px solid #2a2e35;
+        }
+        notebook tab { 
+            background: transparent; 
+            color: #a8b3c1;
+            border: none;
+            border-bottom: 3px solid transparent;
+            padding: 12px 20px;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 150ms ease;
+        }
+        notebook tab:hover {
+            color: #e8eef4;
+            background: #2b2f36;
+        }
+        notebook tab:checked { 
+            background: transparent;
+            color: #3d8bfd;
+            border-bottom-color: #0d6efd;
+        }
+        
+        /* ========== Entry Fields ========== */
+        entry { 
+            background: #23262d; 
+            color: #e8eef4;
+            border: 1px solid #3a4048;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 13px;
+            transition: all 150ms ease;
+        }
+        entry:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+            background: #2b2f36;
+        }
+        entry::placeholder {
+            color: #6c757d;
+        }
+        
+        /* ========== ComboBox / Dropdown ========== */
+        combobox button {
+            background: #23262d;
+            border: 1px solid #3a4048;
+            border-radius: 6px;
+        }
+        combobox button:hover {
+            background: #2b2f36;
+            border-color: #4a4e57;
+        }
+        
+        /* ========== SpinButton ========== */
+        spinbutton {
+            background: #23262d;
+            border: 1px solid #3a4048;
+            border-radius: 6px;
+        }
+        spinbutton entry {
+            border: none;
+        }
+        spinbutton button {
+            background: #2d3139;
+            border: none;
+            border-left: 1px solid #3a4048;
+        }
+        spinbutton button:hover {
+            background: #363c46;
+        }
+        
+        /* ========== Scrollbars ========== */
+        scrollbar {
+            background: transparent;
+        }
+        scrollbar trough {
+            background: #23262d;
+            border-radius: 4px;
+        }
+        scrollbar slider {
+            background: #4a4e57;
+            border-radius: 4px;
+            min-width: 8px;
+            min-height: 40px;
+        }
+        scrollbar slider:hover {
+            background: #5a5e67;
+        }
+        scrollbar slider:active {
+            background: #6a6e77;
+        }
+        scrollbar.vertical slider {
+            min-width: 8px;
+        }
+        scrollbar.horizontal slider {
+            min-height: 8px;
+        }
+        
+        /* ========== Checkbutton ========== */
+        checkbutton {
+            color: #e8eef4;
+        }
+        checkbutton check {
+            background: #23262d;
+            border: 1px solid #3a4048;
+            border-radius: 4px;
+        }
+        checkbutton check:checked {
+            background: #0d6efd;
+            border-color: #0d6efd;
+        }
+        checkbutton check:hover {
+            border-color: #4a4e57;
+        }
+        
+        /* ========== Frame ========== */
+        frame {
+            border: 1px solid #2a2e35;
+            border-radius: 8px;
+        }
+        frame > border {
+            border-radius: 8px;
+        }
+        
+        /* ========== Scrolled Window ========== */
+        scrolledwindow {
+            border-radius: 8px;
+        }
+        
+        /* ========== Mini Popup Window ========== */
+        .mini-popup { 
+            background: #23262d; 
+            color: #e8eef4;
+            border: 1px solid #3a3e47;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* ========== Separator ========== */
+        separator {
+            background: #2a2e35;
+            min-width: 1px;
+            min-height: 1px;
+        }
+        
+        /* ========== Utilities ========== */
+        .help-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #0d6efd;
+        }
+        
+        /* Status-based styling helpers */
+        .status-downloading {
+            color: #3d8bfd;
+        }
+        .status-completed {
+            color: #28a745;
+        }
+        .status-paused {
+            color: #ffc107;
+        }
+        .status-error {
+            color: #dc3545;
+        }
+        .status-queued {
+            color: #6c757d;
+        }
         """
         try:
             css.load_from_data(css_data)
@@ -2946,9 +3367,52 @@ class MainWindow(Gtk.Window):
         # Robust playlist expansion: use yt-dlp JSON flat playlist; avoid duplicates.
         probe_cmd = ["yt-dlp", "--flat-playlist", "--dump-json", url]
         added = 0
+        playlist_title = None
+        
         try:
             result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
             lines = result.stdout.strip().splitlines()
+            
+            # Extract playlist title from first entry
+            for raw in lines:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    data = json.loads(raw)
+                    # Get playlist title from metadata
+                    if not playlist_title and (data.get('playlist_title') or data.get('playlist')):
+                        playlist_title = data.get('playlist_title') or data.get('playlist')
+                        # Clean up playlist title for use as folder name
+                        if playlist_title:
+                            # Remove invalid filename characters
+                            playlist_title = re.sub(r'[<>:"/\\|?*]', '', playlist_title)
+                            # Limit length to avoid path issues
+                            if len(playlist_title) > 100:
+                                playlist_title = playlist_title[:100]
+                        break
+                except Exception:
+                    continue
+            
+            # If no playlist title found, try to extract from URL
+            if not playlist_title:
+                try:
+                    # Try yt-dlp to get playlist info
+                    info_cmd = ["yt-dlp", "--flat-playlist", "--print", "playlist_title", url]
+                    info_result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=10)
+                    if info_result.returncode == 0 and info_result.stdout.strip():
+                        playlist_title = info_result.stdout.strip().splitlines()[0]
+                        playlist_title = re.sub(r'[<>:"/\\|?*]', '', playlist_title)
+                        if len(playlist_title) > 100:
+                            playlist_title = playlist_title[:100]
+                except Exception:
+                    pass
+            
+            # Fallback: use generic name with timestamp
+            if not playlist_title:
+                import time
+                playlist_title = f"Playlist_{int(time.time())}"
+            
             urls = []
             if parse_flat_playlist_lines:
                 urls = parse_flat_playlist_lines(lines)
@@ -2973,9 +3437,13 @@ class MainWindow(Gtk.Window):
             if not urls:
                 self.show_message("Playlist appears empty or inaccessible.")
                 return
+            
+            print(f"[GUI] Adding playlist '{playlist_title}' with {len(urls)} videos", file=sys.stderr)
+            
             for full_url in urls:
                 item = DownloadItem(full_url, "Fetching title...")
                 item.kind = 'media'
+                item.playlist_name = playlist_title  # Store playlist name for folder organization
                 self.queue.append(item)
                 item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status])
                 # Fetch titles in background for nicer display

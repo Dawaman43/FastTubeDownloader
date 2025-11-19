@@ -1,5 +1,5 @@
 pkgname=fasttube-downloader
-pkgver=0.1.0
+pkgver=2.1
 pkgrel=1
 pkgdesc="FastTube Downloader – YouTube & generic file downloader"
 arch=(any)
