@@ -87,6 +87,7 @@ class DownloadItem:
         self.gid = None
         self.client_conn = None
         self.client_req_id = None
+        self.playlist_name = None
 
     def __repr__(self):
         return f"<DownloadItem {self.title!r} {self.progress}% {self.status}>"
@@ -899,39 +900,52 @@ class MainWindow(Gtk.Window):
             self.on_start_downloads(None)
 
     def add_playlist(self, url):
+        # We use --flat-playlist to get metadata quickly.
+        # We need the playlist title to organize files.
         probe_cmd = ["yt-dlp", "--flat-playlist", "--dump-json", url]
         added = 0
         try:
             result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
             lines = result.stdout.strip().splitlines()
-            urls = []
-            if parse_flat_playlist_lines:
-                urls = parse_flat_playlist_lines(lines)
-            else:
-                seen_ids = set()
-                for raw in lines:
-                    raw = raw.strip()
-                    if not raw:
-                        continue
-                    try:
-                        data = json.loads(raw)
-                    except Exception:
-                        continue
-                    vid_id = data.get('id') or data.get('url')
-                    if not vid_id or vid_id in seen_ids:
-                        continue
-                    seen_ids.add(vid_id)
-                    urls.append(f"https://www.youtube.com/watch?v={vid_id}")
-            if not urls:
-                self.show_message("Playlist appears empty or inaccessible.")
-                return
-            for full_url in urls:
+            
+            # We will parse JSON manually here to extract playlist title
+            # instead of using playlist_utils.parse_flat_playlist_lines
+            
+            seen_ids = set()
+            playlist_title = None
+            
+            for raw in lines:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    continue
+                
+                # Try to get playlist title from the first valid entry
+                if not playlist_title:
+                   playlist_title = data.get('playlist_title') or data.get('playlist')
+
+                vid_id = data.get('id') or data.get('url')
+                if not vid_id or vid_id in seen_ids:
+                    continue
+                    
+                seen_ids.add(vid_id)
+                full_url = f"https://www.youtube.com/watch?v={vid_id}"
+                
                 item = DownloadItem(full_url, "Fetching title...")
                 item.kind = 'media'
+                item.playlist_name = playlist_title
                 self.queue.append(item)
                 item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
                 threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
                 added += 1
+                
+            if added == 0:
+                 self.show_message("Playlist appears empty or inaccessible.")
+                 return
+
             if self.config.get("auto_start", True) and not self.is_downloading:
                 self.on_start_downloads(None)
         except subprocess.CalledProcessError:
