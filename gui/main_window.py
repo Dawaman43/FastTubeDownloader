@@ -208,7 +208,7 @@ class MainWindow(Gtk.Window):
             "aria_splits": 32,
             "fragment_concurrency": 16,
             "category_mode": "idm",
-            "show_big_popup": True,
+            "show_big_popup": False,  # Disabled annoying flashing popup
             "enable_generic": True,
             "aria2_rpc_enabled": False,
             "aria2_rpc_port": 6800,
@@ -248,6 +248,10 @@ class MainWindow(Gtk.Window):
             self.config["fragment_concurrency"] = 16
         if self.config.get("category_mode") not in ("idm", "flat"):
             self.config["category_mode"] = "idm"
+            
+        # FORCE disable annoying popup for v2
+        self.config["show_big_popup"] = False
+        
         os.makedirs(self.config["download_folder"], exist_ok=True)
 
     def build_ui(self):
