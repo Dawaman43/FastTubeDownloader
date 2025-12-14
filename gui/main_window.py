@@ -1127,12 +1127,43 @@ class MainWindow(Gtk.Window):
             selection = self.treeview.get_selection()
             model, treeiter = selection.get_selected()
             menu = Gtk.Menu()
-            copy_item = Gtk.MenuItem(label="Copy URL")
+
+            # Force Start
+            start_item = Gtk.MenuItem(label="Force Start")
+            start_item.connect("activate", self.on_force_start)
+            menu.append(start_item)
+
+            # Stop
+            stop_item = Gtk.MenuItem(label="Stop Download")
+            stop_item.connect("activate", self.on_stop_download)
+            menu.append(stop_item)
+
+            # Separator
+            menu.append(Gtk.SeparatorMenuItem())
+            
+            # Open File
+            file_item = Gtk.MenuItem(label="Open File")
+            file_item.connect("activate", self.on_hist_open_file_context)
+            menu.append(file_item)
+
+            # Open Folder
             open_folder_item = Gtk.MenuItem(label="Open Folder")
-            copy_item.connect("activate", lambda *_: self.copy_selected_url())
             open_folder_item.connect("activate", self.on_open_folder)
-            menu.append(copy_item)
             menu.append(open_folder_item)
+            
+            # Copy URL
+            copy_item = Gtk.MenuItem(label="Copy URL")
+            copy_item.connect("activate", lambda *_: self.copy_selected_url())
+            menu.append(copy_item)
+
+            # Separator
+            menu.append(Gtk.SeparatorMenuItem())
+
+            # Remove
+            remove_item = Gtk.MenuItem(label="Remove")
+            remove_item.connect("activate", self.on_remove_selected)
+            menu.append(remove_item)
+
             menu.show_all()
             try:
                 menu.popup_at_pointer(event)
@@ -1148,6 +1179,35 @@ class MainWindow(Gtk.Window):
             return
         url = model[treeiter][0]
         self.clipboard.set_text(url, -1)
+
+    def on_force_start(self, widget):
+        item = self._get_selected_item()
+        if item and item.status != "Downloading...":
+             self._set_status(item, "Queued")
+             if not self.is_downloading:
+                 self.on_start_downloads(None)
+
+    def on_stop_download(self, widget):
+        item = self._get_selected_item()
+        if item and item.status == "Downloading...":
+             self._set_status(item, "Stopped")
+             
+    def on_hist_open_file_context(self, widget):
+        item = self._get_selected_item()
+        if item and item.dest_path and os.path.exists(item.dest_path):
+             self._open_file(item.dest_path)
+             
+    def _get_selected_item(self):
+        selection = self.treeview.get_selection()
+        model, treeiter = selection.get_selected()
+        if treeiter:
+            try:
+                idx = model.get_path(treeiter).get_indices()[0]
+                if idx < len(self.queue):
+                    return self.queue[idx]
+            except Exception:
+                pass
+        return None
 
     def check_clipboard_periodic(self):
         if not self.clipboard_check.get_active():
@@ -3743,12 +3803,43 @@ class MainWindow(Gtk.Window):
             selection = self.treeview.get_selection()
             model, treeiter = selection.get_selected()
             menu = Gtk.Menu()
-            copy_item = Gtk.MenuItem(label="Copy URL")
+
+            # Force Start
+            start_item = Gtk.MenuItem(label="Force Start")
+            start_item.connect("activate", self.on_force_start)
+            menu.append(start_item)
+
+            # Stop
+            stop_item = Gtk.MenuItem(label="Stop Download")
+            stop_item.connect("activate", self.on_stop_download)
+            menu.append(stop_item)
+
+            # Separator
+            menu.append(Gtk.SeparatorMenuItem())
+            
+            # Open File
+            file_item = Gtk.MenuItem(label="Open File")
+            file_item.connect("activate", self.on_hist_open_file_context)
+            menu.append(file_item)
+
+            # Open Folder
             open_folder_item = Gtk.MenuItem(label="Open Folder")
-            copy_item.connect("activate", lambda *_: self.copy_selected_url())
             open_folder_item.connect("activate", self.on_open_folder)
-            menu.append(copy_item)
             menu.append(open_folder_item)
+            
+            # Copy URL
+            copy_item = Gtk.MenuItem(label="Copy URL")
+            copy_item.connect("activate", lambda *_: self.copy_selected_url())
+            menu.append(copy_item)
+            
+            # Separator
+            menu.append(Gtk.SeparatorMenuItem())
+
+            # Remove
+            remove_item = Gtk.MenuItem(label="Remove")
+            remove_item.connect("activate", self.on_remove_selected)
+            menu.append(remove_item)
+
             menu.show_all()
             try:
                 menu.popup_at_pointer(event)

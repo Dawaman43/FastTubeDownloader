@@ -4,13 +4,16 @@
 set -e
 
 VERSION="2.1.2"
-OUTPUT_DIR="dist/firefox"
+# Define ROOT_DIR as the directory where the script is located
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OUTPUT_DIR="dist/firefox" # This will be relative to ROOT_DIR
 EXTENSION_NAME="fasttube-downloader-firefox-${VERSION}"
+PACKAGE_NAME="${EXTENSION_NAME}.xpi"
 
 echo "Packaging Firefox Extension v${VERSION}..."
 
 # Create output directory
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$ROOT_DIR/$OUTPUT_DIR"
 
 # Create temporary directory for packaging
 TEMP_DIR=$(mktemp -d)
@@ -33,13 +36,13 @@ cd "$TEMP_DIR"
 zip -r "${EXTENSION_NAME}.xpi" ./*
 
 # Move to output directory
-mv "${EXTENSION_NAME}.xpi" "${PWD}/../../${OUTPUT_DIR}/"
+mv "${EXTENSION_NAME}.xpi" "$ROOT_DIR/$OUTPUT_DIR/"
 
 echo ""
 cd - > /dev/null
 
 echo "✅ Firefox extension packaged successfully!"
-echo "Output: ${OUTPUT_DIR}/${EXTENSION_NAME}.xpi"
+echo "Output: $ROOT_DIR/$OUTPUT_DIR/${EXTENSION_NAME}.xpi"
 echo ""
 echo "📋 Next steps for Firefox Add-ons submission:"
 echo "1. Go to https://addons.mozilla.org/developers/addon/submit/distribution"

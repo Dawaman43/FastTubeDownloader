@@ -13,8 +13,85 @@ let fileTypeFilters = {
   archives: true,
   programs: true,
   images: true,
+  images: true,
   other: true
 };
+
+// Aggressive Interception: Catch browser downloads
+chrome.downloads.onCreated.addListener((downloadItem) => {
+  if (!downloadInterception) return;
+
+  // Avoid loop: if we just started this download via extension, ignore
+  // But chrome.downloads.download() is how we'd start one if not native.
+  // Since we use native messaging, we don't start browser downloads ourselves usually.
+
+  // Basic filtering by extension
+  if (!shouldIntercept(downloadItem)) return;
+
+  // Cancel the browser download
+  chrome.downloads.cancel(downloadItem.id, () => {
+    if (chrome.runtime.lastError) {
+      console.warn("Failed to cancel download:", chrome.runtime.lastError);
+    }
+    // Erase from browser history to be clean
+    chrome.downloads.erase({ id: downloadItem.id });
+
+    // Send to FastTube
+    // We need file filter type
+    const fileType = getFileType(downloadItem.filename || downloadItem.url);
+
+    // Create request object simulating the content script message
+    const request = {
+      url: downloadItem.url,
+      title: downloadItem.filename ? downloadItem.filename.split(/[/\\]/).pop() : "Unknown",
+      fileType: fileType,
+      referrer: downloadItem.referrer
+    };
+
+    handleDownloadRequest(request, () => { });
+  });
+});
+
+function getFileType(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+
+  const types = {
+    videos: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv'],
+    music: ['mp3', 'm4a', 'aac', 'flac', 'wav', 'ogg'],
+    images: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'],
+    documents: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'],
+    archives: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'iso', 'img'],
+    programs: ['exe', 'msi', 'deb', 'rpm', 'appimage', 'sh']
+  };
+
+  for (const [type, extensions] of Object.entries(types)) {
+    if (extensions.includes(ext)) return type;
+  }
+  return 'other';
+}
+
+function shouldIntercept(downloadItem) {
+  // Don't intercept if paused/cancelled immediately
+  if (downloadItem.state !== 'in_progress') return false;
+
+  // Check Protocol
+  if (!downloadItem.url.startsWith('http')) return false;
+
+  // Check extension filter
+  const type = getFileType(downloadItem.filename || downloadItem.url);
+  // Mapping to our simple filter keys
+  let filterKey = type;
+  if (type === 'programs') filterKey = 'archives'; // Group programs with archives/docs if needed, or add new key
+
+  // If we don't have a specific key, it's 'other'
+  if (!fileTypeFilters[filterKey] && filterKey !== 'other') {
+    // If it matched a known type but that type is disabled
+    return false;
+  }
+  if (filterKey === 'other' && !fileTypeFilters.other) return false;
+
+  return true;
+}
 
 // Keep service worker alive with periodic alarm
 chrome.runtime.onInstalled.addListener(() => {
