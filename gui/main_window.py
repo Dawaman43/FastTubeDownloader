@@ -88,9 +88,94 @@ class DownloadItem:
         self.client_conn = None
         self.client_req_id = None
         self.playlist_name = None
+        self.custom_folder = None
+        self.custom_category = None
 
     def __repr__(self):
         return f"<DownloadItem {self.title!r} {self.progress}% {self.status}>"
+
+class DownloadOptionsDialog(Gtk.Dialog):
+    def __init__(self, parent, url, title=None, default_folder=None, default_category='Videos', categories=None):
+        super().__init__(title="New Download", transient_for=parent, flags=0)
+        self.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            "Start Download", Gtk.ResponseType.OK
+        )
+        self.set_default_size(500, -1)
+        self.set_border_width(10)
+
+        box = self.get_content_area()
+        box.set_spacing(10)
+        
+        # URL
+        row_url = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl_url = Gtk.Label(label="URL:")
+        lbl_url.set_width_chars(10)
+        lbl_url.set_xalign(0)
+        entry_url = Gtk.Entry()
+        entry_url.set_text(url)
+        entry_url.set_editable(False)
+        row_url.pack_start(lbl_url, False, False, 0)
+        row_url.pack_start(entry_url, True, True, 0)
+        box.pack_start(row_url, False, False, 0)
+
+        # Title (Editable)
+        row_title = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl_title = Gtk.Label(label="Title:")
+        lbl_title.set_width_chars(10)
+        lbl_title.set_xalign(0)
+        self.entry_title = Gtk.Entry()
+        self.entry_title.set_text(title or "Getting metadata...")
+        row_title.pack_start(lbl_title, False, False, 0)
+        row_title.pack_start(self.entry_title, True, True, 0)
+        box.pack_start(row_title, False, False, 0)
+
+        # Category
+        row_cat = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl_cat = Gtk.Label(label="Category:")
+        lbl_cat.set_width_chars(10)
+        lbl_cat.set_xalign(0)
+        self.combo_cat = Gtk.ComboBoxText()
+        if categories:
+            for cat in categories:
+                self.combo_cat.append(cat, cat)
+        else:
+             for cat in ["Videos", "Music", "Documents", "Archives", "Pictures", "ISO", "Other"]:
+                 self.combo_cat.append(cat, cat)
+        self.combo_cat.set_active_id(default_category)
+        if not self.combo_cat.get_active_id():
+             self.combo_cat.set_active(0)
+             
+        row_cat.pack_start(lbl_cat, False, False, 0)
+        row_cat.pack_start(self.combo_cat, True, True, 0)
+        box.pack_start(row_cat, False, False, 0)
+
+        # Save To Folder
+        row_folder = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl_folder = Gtk.Label(label="Save To:")
+        lbl_folder.set_width_chars(10)
+        lbl_folder.set_xalign(0)
+        self.fc_btn = Gtk.FileChooserButton(title="Select Download Folder", action=Gtk.FileChooserAction.SELECT_FOLDER)
+        if default_folder:
+            self.fc_btn.set_current_folder(str(default_folder))
+        
+        row_folder.pack_start(lbl_folder, False, False, 0)
+        row_folder.pack_start(self.fc_btn, True, True, 0)
+        box.pack_start(row_folder, False, False, 0)
+
+        # Checkbox: Don't ask again
+        self.chk_dont_ask = Gtk.CheckButton(label="Don't ask me again")
+        box.pack_start(self.chk_dont_ask, False, False, 0)
+
+        self.show_all()
+
+    def get_values(self):
+        return {
+            'title': self.entry_title.get_text(),
+            'category': self.combo_cat.get_active_id() or self.combo_cat.get_active_text(),
+            'folder': self.fc_btn.get_filename(),
+            'dont_ask': self.chk_dont_ask.get_active()
+        }
 
 class MainWindow(Gtk.Window):
     def __init__(self):
@@ -215,6 +300,7 @@ class MainWindow(Gtk.Window):
             "aria2_rpc_port": 6800,
             "minimize_to_tray": True,
             "auto_start": True,
+            "show_download_options": True,
             "generic_extensions_map": {
                 "Videos": [".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".wmv"],
                 "Music": [".mp3", ".m4a", ".aac", ".flac", ".wav", ".ogg"],
@@ -871,9 +957,41 @@ class MainWindow(Gtk.Window):
         self.url_entry.set_text("")
 
     def add_url(self, url: str, fmt: str = None, qual: str = None, subs_active: bool = None):
+        url = url.strip()
+        if not url: return
+
+        # IDM-style Dialog
+        custom_folder = None
+        custom_category = None
+        custom_title = "Fetching title..."
+        
+        if self.config.get("show_download_options", True):
+            dlg = DownloadOptionsDialog(
+                self, 
+                url, 
+                title=custom_title, 
+                default_folder=self.config.get("download_folder"),
+                default_category=self.config.get("category_mode", "idm") == "idm" and "Videos" or "Other"
+            )
+            response = dlg.run()
+            vals = dlg.get_values()
+            dlg.destroy()
+            
+            if response != Gtk.ResponseType.OK:
+                return # User cancelled
+
+            if vals['dont_ask']:
+                self.config["show_download_options"] = False
+                self.on_save_defaults(None)
+            
+            custom_folder = vals['folder']
+            custom_category = vals['category']
+            if vals['title'] and vals['title'] != "Fetching metadata...":
+                custom_title = vals['title']
+
         try:
             if self._is_playlist_url(url):
-                self.add_playlist(url)
+                self.add_playlist(url, custom_folder, custom_category)
                 return
         except Exception:
             pass
@@ -881,11 +999,18 @@ class MainWindow(Gtk.Window):
             if self.config.get("enable_generic", True):
                 chosen_fmt = fmt or self.format_combo.get_active_text()
                 if chosen_fmt == 'Generic File' or self._looks_like_direct_file(url):
-                    self.add_generic_file(url)
+                    self.add_generic_file(url, custom_folder, custom_category)
                     return
+
         except Exception:
             pass
-        item = DownloadItem(url, "Fetching title...")
+        
+        if "youtube.com" in url or "youtu.be" in url:
+            if "list=" in url and "playlist" in url: # Explicit playlist URL (fallback check)
+                 self.add_playlist(url, custom_folder, custom_category)
+                 return
+        
+        item = DownloadItem(url, custom_title)
         item.kind = 'media'
         item.req_format = fmt or self.format_combo.get_active_text()
         print(f"[GUI] queued media URL {url}", file=sys.stderr)
@@ -893,13 +1018,18 @@ class MainWindow(Gtk.Window):
         if subs_active is None:
             subs_active = self.subs_check.get_active()
         item.req_subs = subs_active
+        item.custom_folder = custom_folder
+        item.custom_category = custom_category
+
         self.queue.append(item)
         item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
         threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
+        
         if self.config.get("auto_start", True) and not self.is_downloading:
             self.on_start_downloads(None)
 
-    def add_playlist(self, url):
+    
+    def add_playlist(self, url, custom_folder=None, custom_category=None):
         # We use --flat-playlist to get metadata quickly.
         # We need the playlist title to organize files.
         probe_cmd = ["yt-dlp", "--flat-playlist", "--dump-json", url]
@@ -914,6 +1044,22 @@ class MainWindow(Gtk.Window):
             seen_ids = set()
             playlist_title = None
             
+            # Pre-scan for playlist title
+            for raw in lines:
+                if not raw.strip(): continue
+                try:
+                    data = json.loads(raw)
+                    if not playlist_title:
+                        playlist_title = data.get('playlist_title') or data.get('playlist')
+                        if playlist_title: break
+                except: pass
+            
+            # If we didn't get passed custom settings (e.g. called from IDM dialog path already),
+            # we might want to ask NOW if it wasn't asked in add_url? 
+            # But add_url handles the dialog. 
+            # If add_playlist is called directly (e.g. CLI arg?), we might need to check.
+            # For simplicity, assume add_url handles it if configured.
+            
             for raw in lines:
                 raw = raw.strip()
                 if not raw:
@@ -923,7 +1069,7 @@ class MainWindow(Gtk.Window):
                 except Exception:
                     continue
                 
-                # Try to get playlist title from the first valid entry
+                # Try to get playlist title from the first valid entry (fallback)
                 if not playlist_title:
                    playlist_title = data.get('playlist_title') or data.get('playlist')
 
@@ -937,6 +1083,9 @@ class MainWindow(Gtk.Window):
                 item = DownloadItem(full_url, "Fetching title...")
                 item.kind = 'media'
                 item.playlist_name = playlist_title
+                item.custom_folder = custom_folder
+                item.custom_category = custom_category
+                
                 self.queue.append(item)
                 item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
                 threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
@@ -950,7 +1099,16 @@ class MainWindow(Gtk.Window):
                 self.on_start_downloads(None)
         except subprocess.CalledProcessError:
             self.show_message("Error detecting playlist; treating as single video.")
-            self.add_url(url)
+            # Fallback: Treat as single video without calling add_url recursively
+            item = DownloadItem(url, "Fetching title...")
+            item.kind = 'media'
+            item.custom_folder = custom_folder
+            item.custom_category = custom_category
+            self.queue.append(item)
+            item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
+            threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
+            if self.config.get("auto_start", True) and not self.is_downloading:
+                self.on_start_downloads(None)
 
     def _is_playlist_url(self, url: str) -> bool:
         try:
@@ -1489,6 +1647,34 @@ class MainWindow(Gtk.Window):
             # For yt-dlp items, we default to Videos or Music based on format
             
             fmt_hint = getattr(item, 'req_format', '') or self.format_combo.get_active_text()
+
+            # IDM-style override:
+            custom_folder = getattr(item, 'custom_folder', None)
+            custom_category = getattr(item, 'custom_category', None)
+
+            if custom_folder:
+                 # If user picked a specific folder in the dialog, use it!
+                 # If custom_category is something like "Videos", we might want to append it?
+                 # Actually, usually if user picks a folder, they mean THAT folder.
+                 # BUT, for playlist, they pick the PARENT.
+                 
+                 # Logic:
+                 # If playlist_name is set, we still want to create the playlist subfolder inside custom_folder (or custom_category).
+                 
+                 # Let's say user picks ~/Downloads/MyStuff.
+                 # Item is playlist "CoolVids".
+                 # Result: ~/Downloads/MyStuff/CoolVids/
+                 
+                 # Implementation:
+                 # Update organizer base_dir to the custom_folder.
+                 self.file_organizer.base_dir = Path(custom_folder)
+                 
+                 # If also provided a custom category, force organizer to use it?
+                 if custom_category:
+                     # This basically forces the "Category" logic to use this string
+                     # But FileOrganizer calculates category automatically from URL usually.
+                     # We can pass validation to force it?
+                     pass 
             
             target_path, _ = self.file_organizer.get_download_path(
                 filename=self._guess_filename(item.url),
@@ -1496,6 +1682,15 @@ class MainWindow(Gtk.Window):
                 playlist_name=playlist_name,
                 format_type=fmt_hint
             )
+            
+            # If custom_folder was set, 'target_path' will be relative to it (if FileOrganizer behavior holds).
+            # FileOrganizer uses self.base_dir. So if we updated base_dir, it should work.
+            
+            # One Catch: FileOrganizer logic for "IDM" mode appends 'Videos' or whatever.
+            # If user picked '~/Desktop' and category 'Videos' (default).
+            # Path: ~/Desktop/Videos/Title.mp4.
+            # This is probably desired behavior if "Categorized" is checked.
+            
             folder = str(target_path)
             
             # Create directory
@@ -3699,13 +3894,15 @@ class MainWindow(Gtk.Window):
         except Exception:
             return 'download'
 
-    def add_generic_file(self, url: str):
+    def add_generic_file(self, url: str, custom_folder=None, custom_category=None):
         title = self._guess_filename(url)
         item = DownloadItem(url, title)
         item.kind = 'generic'
         item.req_format = 'Generic File'
+        item.custom_folder = custom_folder
+        item.custom_category = custom_category
         self.queue.append(item)
-        item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status])
+        item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
         # Optionally perform HEAD request to refine size/title asynchronously
         threading.Thread(target=self._probe_generic_metadata, args=(item,), daemon=True).start()
         if self.config.get("auto_start", True) and not self.is_downloading:

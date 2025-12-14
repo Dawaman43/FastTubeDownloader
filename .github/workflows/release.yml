@@ -25,6 +25,10 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y dpkg-deb rpm libgirepository-2.0-dev libcairo2-dev pkg-config python3-dev gobject-introspection libglib2.0-dev
+        echo "=== DEBUG: Package Search Paths ==="
+        dpkg -L libgirepository-2.0-dev | grep .pc || true
+        export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:$PKG_CONFIG_PATH
+        pkg-config --list-all | grep girepository || true
     
     - name: Build packages
       run: |
