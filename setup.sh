@@ -21,7 +21,11 @@ fi
 echo "Checking/installing dependencies..."
 PKG_OK=0
 if command -v apt-get >/dev/null 2>&1; then
-  sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1 gir1.2-notify-0.7 libgirepository1.0-dev yt-dlp aria2 jq || PKG_OK=1
+  if apt-cache show libgirepository-2.0-dev >/dev/null 2>&1; then
+    sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1 gir1.2-notify-0.7 libgirepository-2.0-dev yt-dlp aria2 jq || PKG_OK=1
+  else
+    sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1 gir1.2-notify-0.7 libgirepository1.0-dev yt-dlp aria2 jq || PKG_OK=1
+  fi
 elif command -v dnf >/dev/null 2>&1; then
   sudo dnf install -y python3-gobject gtk3 libappindicator-gtk3 yt-dlp aria2 jq || PKG_OK=1
 elif command -v pacman >/dev/null 2>&1; then

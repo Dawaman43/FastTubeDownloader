@@ -1477,7 +1477,9 @@ class MainWindow(Gtk.Window):
         if self.file_organizer:
             # Update organizer with current config
             self.file_organizer.base_dir = Path(folder)
-            self.file_organizer.category_mode = self.config.get("category_mode", "idm")
+            # Use current UI selection for category mode, fallback to config or default
+            ui_mode = self.category_combo.get_active_id()
+            self.file_organizer.category_mode = ui_mode if ui_mode else self.config.get("category_mode", "idm")
             
             # Determine target folder name (playlist or default)
             playlist_name = getattr(item, 'playlist_name', None)
