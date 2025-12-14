@@ -1,0 +1,10 @@
+&pyo3::types::PyModule
+&pyo3::types::PyModule: WrapPyFunctionArg<'_, _>
+&pyo3::Borrowed<'_, 'py, pyo3::types::PyModule>
+&pyo3::Bound<'py, pyo3::types::PyModule>
+pyo3::Borrowed<'_, 'py, pyo3::types::PyModule>
+pyo3::Bound<'py, pyo3::types::PyModule>
+pyo3::Python<'py>
+BoundRef<'_, '_, pyo3::types::PyModule>
+&pyo3::types::PyModule: From<BoundRef<'_, '_, pyo3::types::PyModule>>
+Into<&pyo3::types::PyModule>
