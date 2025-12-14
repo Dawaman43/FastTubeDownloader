@@ -21,11 +21,11 @@ fi
 echo "Checking/installing dependencies..."
 PKG_OK=0
 if command -v apt-get >/dev/null 2>&1; then
-  sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-3.0 yt-dlp aria2 jq || PKG_OK=1
+  sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-3.0 gir1.2-appindicator3-0.1 gir1.2-notify-0.7 libgirepository1.0-dev yt-dlp aria2 jq || PKG_OK=1
 elif command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y python3-gobject gtk3 yt-dlp aria2 jq || PKG_OK=1
+  sudo dnf install -y python3-gobject gtk3 libappindicator-gtk3 yt-dlp aria2 jq || PKG_OK=1
 elif command -v pacman >/dev/null 2>&1; then
-  sudo pacman -Sy --needed --noconfirm python-gobject gtk3 yt-dlp aria2 jq || PKG_OK=1
+  sudo pacman -Sy --needed --noconfirm python-gobject gtk3 libappindicator-gtk3 yt-dlp aria2 jq || PKG_OK=1
 elif command -v zypper >/dev/null 2>&1; then
   sudo zypper --non-interactive in python3-gobject gtk3 yt-dlp aria2 jq || PKG_OK=1
 else
@@ -38,6 +38,25 @@ fi
 echo "Installing to $INSTALL_DIR..."
 sudo mkdir -p "$INSTALL_DIR"
 sudo rsync -av --exclude='setup.sh' --exclude='README.md' . "$INSTALL_DIR/"
+
+# Optional: Build Rust download engine
+if [ "$BUILD_RUST" = "1" ] || [ "$1" = "--with-rust" ]; then
+  echo "Building Rust download engine..."
+  if command -v cargo >/dev/null 2>&1; then
+    cd "$INSTALL_DIR/rust_downloader"
+    cargo build --release 2>/dev/null || echo "Rust build failed, will use aria2c fallback"
+    SO_FILE=$(find target/release -name "fasttube_downloader*.so" -o -name "libfasttube_downloader*.so" 2>/dev/null | head -1)
+    if [ -n "$SO_FILE" ]; then
+      cp "$SO_FILE" "$INSTALL_DIR/gui/fasttube_downloader.so"
+      echo "✅ Rust engine installed"
+    fi
+    cd -
+  else
+    echo "⚠️  Rust not installed. Skipping Rust engine (will use aria2c fallback)"
+    echo "   To install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  fi
+fi
+
 for hostdir in "$TARGET_HOME/.config/google-chrome/NativeMessagingHosts" "$TARGET_HOME/.config/chromium/NativeMessagingHosts"; do
   if [ -f "$hostdir/com.fasttube.downloader.json" ]; then
     if grep -q 'fast_ytdl.sh' "$hostdir/com.fasttube.downloader.json"; then

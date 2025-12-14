@@ -1,84 +1,91 @@
-name: build-release
+name: Release
+
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch: {}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 yt-dlp aria2 zip rsync debhelper fakeroot build-essential rpm appstream patchelf python3-pip
-          pip install --user appimage-builder
-      - name: Build extension zips
-        run: |
-          scripts/build.sh
-          ls -l dist
-      - name: Build .deb package
-        run: |
-          echo "Building .deb package";
-          cd packaging
-          dpkg-buildpackage -us -uc || echo "deb build failed (non-fatal)"
-          cd ..
-          ls -1 *.deb || true
-      - name: Build .rpm package
-        run: |
-          echo "Building .rpm package";
-          mkdir -p ~/rpmbuild/{SOURCES,SPECS,BUILD,RPMS,SRPMS} || true
-          VERSION=${GITHUB_REF_NAME#v}
-          sed -i "s/^Version:.*/Version:        ${VERSION}/" packaging/rpm/fasttube-downloader.spec || true
-          git archive --format=tar.gz --prefix=fasttube-downloader-${VERSION}/ -o ~/rpmbuild/SOURCES/fasttube-downloader-${VERSION}.tar.gz ${GITHUB_REF}
-          cp packaging/rpm/fasttube-downloader.spec ~/rpmbuild/SPECS/
-          rpmbuild -ba ~/rpmbuild/SPECS/fasttube-downloader.spec || echo "rpm build failed (non-fatal)"
-          find ~/rpmbuild/RPMS -name '*.rpm' -type f -maxdepth 3 -print
-      - name: Build AppImage
-        run: |
-          echo "Building AppImage";
-          appimage-builder --recipe packaging/AppImageBuilder.yml || echo "AppImage build failed (non-fatal)"
-          ls -1 *.AppImage || true
-      - name: Archive source
-        run: |
-          git archive --format=tar.gz --prefix=FastTubeDownloader-${GITHUB_REF_NAME}/ -o source.tar.gz ${GITHUB_REF}
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: fasttube-artifacts
-          path: |
-            dist/fasttube_chrome.zip
-            dist/fasttube_firefox.zip
-            source.tar.gz
-            *.deb
-            ~/rpmbuild/RPMS/*/*.rpm
-            *.AppImage
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: fasttube-artifacts
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            fasttube_chrome.zip
-            fasttube_firefox.zip
-            source.tar.gz
-            *.deb
-            *.rpm
-            *.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Get version
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y dpkg-deb rpm
+    
+    - name: Build packages
+      run: |
+        chmod +x release.sh
+        ./release.sh || true
+    
+    - name: Package Chrome extension
+      run: |
+        mkdir -p dist/extensions
+        zip -r dist/extensions/fasttube-chrome-${{ steps.version.outputs.VERSION }}.zip \
+          manifest.json background.js content.js popup.html popup.js popup.css \
+          download_ui.js icon16.png icon48.png icon128.png
+    
+    - name: Package Firefox extension
+      run: |
+        mkdir -p dist/extensions
+        zip -r dist/extensions/fasttube-firefox-${{ steps.version.outputs.VERSION }}.zip \
+          manifest.firefox.json background.js content.js popup.html popup.js popup.css \
+          download_ui.js icon16.png icon48.png icon128.png
+        mv dist/extensions/fasttube-firefox-${{ steps.version.outputs.VERSION }}.zip \
+           dist/extensions/fasttube-firefox-${{ steps.version.outputs.VERSION }}.xpi
+    
+    - name: Create source archive
+      run: |
+        mkdir -p dist
+        git archive --format=tar.gz -o dist/fasttube-downloader-${{ steps.version.outputs.VERSION }}.tar.gz HEAD
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/extensions/*
+          dist/*.tar.gz
+          dist/deb/*.deb
+          dist/rpm/*.rpm
+        body: |
+          ## FastTube Downloader v${{ steps.version.outputs.VERSION }}
+          
+          ### Installation
+          
+          **Linux (DEB-based):**
+          ```bash
+          sudo dpkg -i fasttube-downloader_${{ steps.version.outputs.VERSION }}_amd64.deb
+          ```
+          
+          **Linux (RPM-based):**
+          ```bash
+          sudo rpm -i fasttube-downloader-${{ steps.version.outputs.VERSION }}-1.x86_64.rpm
+          ```
+          
+          **From source:**
+          ```bash
+          tar xzf fasttube-downloader-${{ steps.version.outputs.VERSION }}.tar.gz
+          cd fasttube-downloader-${{ steps.version.outputs.VERSION }}
+          sudo ./setup.sh
+          ```
+          
+          ### Browser Extensions
+          
+          - **Chrome**: Load unpacked from the extracted folder or use the .zip file
+          - **Firefox**: Install the .xpi file directly
+          
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

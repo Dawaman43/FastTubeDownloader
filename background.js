@@ -1,22 +1,41 @@
-// FastTube Downloader - Background Service Worker (MV3)
-// Fixes: Extension persistence, progress tracking, native messaging reliability
+// FastTube Downloader v2 - Background Service Worker (MV3)
+// Universal download manager for all file types and websites
 
 let nativePort = null;
 let downloads = {};
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
+let downloadInterception = true; // Global toggle for download interception
+let fileTypeFilters = {
+  videos: true,
+  music: true,
+  documents: true,
+  archives: true,
+  programs: true,
+  images: true,
+  other: true
+};
 
 // Keep service worker alive with periodic alarm
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('FastTube Downloader installed/updated');
+  console.log('FastTube Downloader v2 installed/updated');
+
+  // Create context menu items
+  createContextMenus();
 
   // Create periodic alarm to keep service worker alive
   chrome.alarms.create('keepAlive', { periodInMinutes: 1 });
 
   // Initialize storage
-  chrome.storage.local.get(['downloads'], (data) => {
+  chrome.storage.local.get(['downloads', 'downloadInterception', 'fileTypeFilters'], (data) => {
     if (data.downloads) {
       downloads = data.downloads;
+    }
+    if (data.downloadInterception !== undefined) {
+      downloadInterception = data.downloadInterception;
+    }
+    if (data.fileTypeFilters) {
+      fileTypeFilters = data.fileTypeFilters;
     }
   });
 });
@@ -81,6 +100,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ status: 'ok' });
     return false;
   }
+
+  // Update settings
+  if (request.action === 'updateSettings') {
+    if (request.downloadInterception !== undefined) {
+      downloadInterception = request.downloadInterception;
+    }
+    if (request.fileTypeFilters) {
+      fileTypeFilters = request.fileTypeFilters;
+    }
+    chrome.storage.local.set({ downloadInterception, fileTypeFilters });
+    sendResponse({ status: 'ok' });
+    return false;
+  }
+
+  // Get settings
+  if (request.action === 'getSettings') {
+    sendResponse({ downloadInterception, fileTypeFilters });
+    return false;
+  }
 });
 
 // Handle download request from content script
@@ -122,7 +160,8 @@ function handleDownloadRequest(request, sendResponse) {
       subs: (request.subs !== undefined ? request.subs : (prefs.subs !== undefined ? prefs.subs : true)) ? 'y' : 'n',
       confirm: false,
       show: true,
-      requestId: downloadId
+      requestId: downloadId,
+      fileType: request.fileType || 'video'
     };
 
     // Send to native host
@@ -455,4 +494,161 @@ function updateBadge() {
 // Update badge periodically
 setInterval(updateBadge, 2000);
 
-console.log('FastTube Downloader background script loaded');
+// Create context menus
+function createContextMenus() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'ftd-download-link',
+      title: 'Download with FastTube',
+      contexts: ['link']
+    });
+
+    chrome.contextMenus.create({
+      id: 'ftd-download-video',
+      title: 'Download Video',
+      contexts: ['video']
+    });
+
+    chrome.contextMenus.create({
+      id: 'ftd-download-audio',
+      title: 'Download Audio',
+      contexts: ['audio']
+    });
+
+    chrome.contextMenus.create({
+      id: 'ftd-download-image',
+      title: 'Download Image',
+      contexts: ['image']
+    });
+  });
+}
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  let url = null;
+  let type = 'unknown';
+
+  if (info.menuItemId === 'ftd-download-link') {
+    url = info.linkUrl;
+    type = detectFileType(url);
+  } else if (info.menuItemId === 'ftd-download-video') {
+    url = info.srcUrl;
+    type = 'video';
+  } else if (info.menuItemId === 'ftd-download-audio') {
+    url = info.srcUrl;
+    type = 'audio';
+  } else if (info.menuItemId === 'ftd-download-image') {
+    url = info.srcUrl;
+    type = 'image';
+  }
+
+  if (url) {
+    const title = info.selectionText || extractFileName(url) || 'Download';
+    handleDownloadRequest({
+      url: url,
+      title: title,
+      fileType: type,
+      pageUrl: info.pageUrl
+    }, () => { });
+  }
+});
+
+// Intercept browser downloads
+chrome.downloads.onCreated.addListener((downloadItem) => {
+  if (!downloadInterception) {
+    return;
+  }
+
+  const fileType = detectFileType(downloadItem.url, downloadItem.filename);
+
+  // Check if this file type should be intercepted
+  if (!shouldInterceptFileType(fileType)) {
+    return;
+  }
+
+  // Cancel the browser's default download
+  chrome.downloads.cancel(downloadItem.id);
+  chrome.downloads.erase({ id: downloadItem.id });
+
+  // Send to FastTube
+  handleDownloadRequest({
+    url: downloadItem.url,
+    title: downloadItem.filename || extractFileName(downloadItem.url) || 'Download',
+    fileType: fileType,
+    referrer: downloadItem.referrer
+  }, () => { });
+});
+
+// Detect file type from URL or filename
+function detectFileType(url, filename = '') {
+  const path = filename || url.toLowerCase();
+
+  // Video extensions
+  if (/\.(mp4|mkv|avi|mov|wmv|flv|webm|m4v|mpg|mpeg|3gp|f4v|ts|mts|m2ts)(\?|$)/i.test(path)) {
+    return 'video';
+  }
+
+  // Audio extensions
+  if (/\.(mp3|wav|flac|aac|ogg|wma|m4a|opus|ape|alac)(\?|$)/i.test(path)) {
+    return 'music';
+  }
+
+  // Document extensions
+  if (/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|rtf|odt|ods|odp|epub|mobi)(\?|$)/i.test(path)) {
+    return 'document';
+  }
+
+  // Archive extensions
+  if (/\.(zip|rar|7z|tar|gz|bz2|xz|iso|dmg)(\?|$)/i.test(path)) {
+    return 'archive';
+  }
+
+  // Program/executable extensions
+  if (/\.(exe|msi|deb|rpm|appimage|apk|pkg|dmg|sh|bin)(\?|$)/i.test(path)) {
+    return 'program';
+  }
+
+  // Image extensions
+  if (/\.(jpg|jpeg|png|gif|bmp|svg|webp|ico|tiff|tif|psd|raw|cr2|nef)(\?|$)/i.test(path)) {
+    return 'image';
+  }
+
+  // Video streaming sites
+  if (/youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|twitch\.tv|facebook\.com\/watch|instagram\.com|twitter\.com|tiktok\.com/i.test(url)) {
+    return 'video';
+  }
+
+  return 'other';
+}
+
+// Check if file type should be intercepted
+function shouldInterceptFileType(fileType) {
+  const mapping = {
+    'video': 'videos',
+    'music': 'music',
+    'audio': 'music',
+    'document': 'documents',
+    'archive': 'archives',
+    'program': 'programs',
+    'image': 'images',
+    'other': 'other'
+  };
+
+  const filterKey = mapping[fileType] || 'other';
+  return fileTypeFilters[filterKey] !== false;
+}
+
+// Extract filename from URL
+function extractFileName(url) {
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname;
+    const segments = pathname.split('/');
+    const filename = segments[segments.length - 1];
+    return decodeURIComponent(filename) || 'download';
+  } catch (e) {
+    return 'download';
+  }
+}
+
+console.log('FastTube Downloader v2 background script loaded');

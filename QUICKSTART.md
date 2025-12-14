@@ -1,209 +1,88 @@
-# FastTube Downloader v2.0 - Quick Start Guide
+# FastTube Downloader v2.0.0 - Quick Start Guide
 
-## 🚀 Installation & Testing
+## Installation Complete! ✅
 
-### 1. Load the Extension in Chrome
+FastTube Downloader v2.0.0 is now installed and running!
 
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable **Developer mode** (toggle in top-right corner)
-3. Click **Load unpacked**
-4. Navigate to and select: `/home/dawitworku/Documents/FastTubeDownloader`
-5. The extension should now appear in your extensions list
+## Current Status
 
-### 2. Verify Extension ID Stability
+- ✅ App installed to `/opt/FastTubeDownloader`
+- ✅ Launcher created: `fasttube-downloader`
+- ✅ Desktop entry added
+- ✅ Firefox extension packaged: `dist/firefox/fasttube-downloader-firefox-2.1.2.xpi`
+- ⚠️ System Tray: Temporarily disabled due to AppIndicator compatibility issue
+  - App will close normally instead of minimizing to tray
+  - Will be fixed in next update
 
-The extension uses a hardcoded key in `manifest.json` to maintain a stable ID across reloads. The current ID should be:
-```
-Extension ID: ocdnlcnfhdlefgbkfbbooegjdfpkgedf
-```
+## Launch the App
 
-> **Important**: This ID must match the ID configured in the native messaging host file at:
-> `~/.config/google-chrome/NativeMessagingHosts/com.fasttube.downloader.json`
-
-### 3. Test the New Interface
-
-#### Quick Visual Check
-1. Click the FastTube extension icon in Chrome toolbar
-2. You should see the new IDM-style popup with:
-   - Blue gradient header
-   - Three tabs: Active, History, Settings
-   - Modern dark theme
-
-#### Test Active Downloads
-1. Go to any YouTube video (e.g., `https://www.youtube.com/watch?v=dQw4w9WgXcQ`)
-2. Click the red download button overlay on the video player
-3. Select format and quality
-4. Click **Download**
-5. Open extension popup
-6. Verify you see:
-   - Download title
-   - Progress bar animating
-   - Download speed (if native app running)
-   - ETA calculation
-   - Pause/Cancel buttons
-
-#### Test Settings
-1. Click Settings tab
-2. Toggle various settings (notifications, auto-start, etc.)
-3. Change max simultaneous downloads
-4. Close popup and reopen
-5. Verify settings persisted
-
-#### Test History
-1. Complete a download
-2. Go to History tab
-3. Verify the download appears
-4. Try searching for it
-5. Test Clear History button
-
-### 4. Verify Extension Persistence
-
-The extension now includes keep-alive mechanisms. To verify:
-
-1. Check Chrome DevTools console for the service worker:
-   - Go to `chrome://extensions/`
-   - Find FastTube Downloader
-   - Click "service worker" link under "Inspect views"
-   - You should see periodic "Keep-alive ping" messages every minute
-
-2. Leave browser open for several hours
-3. Verify extension remains active (not disabled)
-
-### 5. Test with Desktop App
-
-If you have the native desktop application:
-
-1. Start the desktop app
-2. Queue a download from the extension
-3. Watch progress update in real-time
-4. Verify notifications appear when download completes
-
-If desktop app is NOT running:
-- You should see a native host error message in the popup
-- The extension will attempt to auto-reconnect when app starts
-
----
-
-## 🎨 What's New - Visual Tour
-
-### IDM-Style Design Elements
-
-**Color Scheme**:
-- Primary Blue: `#0d6efd` (matches IDM)
-- Success Green: `#28a745`
-- Warning Yellow: `#ffc107`
-- Danger Red: `#dc3545`
-- Dark Background: `#1a1d23`
-
-**Animation Features**:
-- Smooth tab transitions
-- Progress bar shimmer effect
-- Hover state animations
-- Fade-in for new downloads
-
-**Typography**:
-- System font stack for native look
-- Proper hierarchy with font weights
-- Letter spacing for readability
-
----
-
-## 🔍 Troubleshooting
-
-### Extension Not Loading
-- Check Developer mode is enabled
-- Verify no syntax errors in console
-- Try removing and re-adding the extension
-
-### Progress Not Showing
-- Ensure desktop app is running
-- Check service worker console for errors
-- Verify native messaging host is configured
-
-### Settings Not Saving
-- Check browser console for storage errors
-- Verify `chrome.storage` permissions in manifest
-- Try clearing extension data and reloading
-
-### Extension Getting Disabled
-- This should no longer happen with v2.0
-- Check for alarm creation in service worker console
-- Look for "Keep-alive ping" messages
-
----
-
-## 📦 Files Changed in v2.0
-
-### New Files
-- `popup.css` - Complete IDM-style stylesheet
-
-### Modified Files
-- `manifest.json` - v2.0, added alarms & notifications permissions
-- `popup.html` - Complete redesign with tabs
-- `popup.js` - Full rewrite with 500+ lines
-- `background.js` - Keep-alive, persistence, notifications
-
----
-
-## 🎯 Testing Checklist
-
-- [ ] Extension loads without errors
-- [ ] IDM-style popup appears
-- [ ] Can start downloads from YouTube
-- [ ] Progress updates in real-time
-- [ ] Can pause/resume downloads
-- [ ] Download history works
-- [ ] Settings persist across sessions
-- [ ] Notifications appear (if enabled)
-- [ ] Extension badge shows download count
-- [ ] Extension stays enabled over multiple days
-- [ ] Native error shown when app not running
-- [ ] Auto-reconnect works when app restarts
-
----
-
-## 💡 Development Tips
-
-### Reload Extension After Changes
-After making code changes:
 ```bash
-# In chrome://extensions/, click the reload icon for FastTube
-# Or use keyboard shortcut while on extensions page
+fasttube-downloader
 ```
 
-### View Service Worker Console
+Or search for "FastTube Downloader" in your applications menu.
+
+## Load Browser Extensions
+
+### Chrome/Chromium
+1. Open `chrome://extensions/`
+2. Enable "Developer mode" (toggle in top-right)
+3. Click "Load unpacked"
+4. Select `/home/dave/FastTubeDownloader`
+
+### Firefox (Local Testing)
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click "Load Temporary Add-on"
+3. Select `/home/dave/FastTubeDownloader/manifest.firefox.json`
+
+### Firefox (Production - Submit to Mozilla)
+1. Go to https://addons.mozilla.org/developers/addon/submit/distribution
+2. Upload `dist/firefox/fasttube-downloader-firefox-2.1.2.xpi`
+3. Follow instructions in `FIREFOX_SUBMISSION.md`
+
+## Test the App
+
+1. **YouTube Video**: Paste a YouTube URL and click "Add Download"
+2. **YouTube Playlist**: Try a playlist URL - files will organize into subfolders
+3. **Generic File**: Try a PDF or ZIP file URL
+4. **Context Menu**: Right-click any link/video in your browser → "Download with FastTube"
+
+## Features Available
+
+✅ Universal download support (1000+ sites)
+✅ All file types (videos, music, documents, archives, etc.)
+✅ Smart folder organization (Videos/, Music/, Documents/, etc.)
+✅ Playlist subfolders
+✅ Multi-threaded downloads (16-32 connections)
+✅ Context menu integration
+✅ Background downloading
+✅ Desktop notifications
+⏳ System Tray (coming in next update)
+⏳ Rust engine (optional, build with `sudo ./setup.sh --with-rust`)
+
+## Troubleshooting
+
+### App won't start
+```bash
+# Check for errors
+python3 /opt/FastTubeDownloader/gui/main_window.py
 ```
-chrome://extensions/ → FastTube Downloader → "service worker" link
-```
 
-### View Popup Console
-```
-Right-click extension icon → Inspect popup
-```
+### Extension not working
+- Make sure native messaging host is set up (automatic during install)
+- Check browser console for errors (F12)
+- Reload the extension
 
-### Check Storage
-```javascript
-// In any extension console:
-chrome.storage.local.get(null, console.log);
-chrome.storage.sync.get(null, console.log);
-```
+### Downloads fail
+- Verify `yt-dlp` and `aria2` are installed: `which yt-dlp aria2c`
+- Check download folder permissions
+- Update yt-dlp: `sudo pacman -S yt-dlp`
 
-### Monitor Alarms
-```javascript
-// In service worker console:
-chrome.alarms.getAll(console.log);
-```
+## Next Steps
 
----
+1. Test downloading from different websites
+2. Submit Firefox extension to Mozilla Add-ons
+3. Star the project on GitHub: https://github.com/Dawaman43/FastTubeDownloader
+4. Report any issues: https://github.com/Dawaman43/FastTubeDownloader/issues
 
-## 🌟 Next Steps
-
-The extension is now feature-complete for v2.0. Optional future enhancements could include:
-
-1. **Bandwidth Limiter** - Control download speed
-2. **Download Scheduler** - Schedule downloads for specific times
-3. **Cloud Sync** - Sync history across devices
-4. **Playlist Categorization** - Auto-organize by playlist
-5. **Video Preview** - Thumbnail preview in download card
-
-Happy downloading! 🎉
+Enjoy FastTube Downloader v2! 🚀

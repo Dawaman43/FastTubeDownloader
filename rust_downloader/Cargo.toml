@@ -1,0 +1,28 @@
+[package]
+name = "fasttube_downloader"
+version = "2.0.0"
+edition = "2021"
+authors = ["FastTube Contributors"]
+description = "High-performance download engine for FastTube Downloader"
+
+[lib]
+name = "fasttube_downloader"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+reqwest = { version = "0.11", features = ["blocking", "stream", "rustls-tls"], default-features = false }
+tokio = { version = "1.35", features = ["full"] }
+futures = "0.3"
+indicatif = "0.17"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+pyo3 = { version = "0.20", features = ["extension-module", "anyhow"] }
+bytes = "1.5"
+sha2 = "0.10"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

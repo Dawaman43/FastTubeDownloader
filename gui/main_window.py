@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os, sys, json, subprocess, threading, gi, re, urllib.request, urllib.parse, socket, time
+from pathlib import Path
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 try:
@@ -19,6 +20,23 @@ try:
     from .playlist_utils import parse_flat_playlist_lines
 except Exception:
     parse_flat_playlist_lines = None
+try:
+    from .file_organizer import FileOrganizer
+except Exception:
+    FileOrganizer = None
+
+try:
+    from .download_engine import get_engine
+    DOWNLOAD_ENGINE = get_engine()
+except Exception:
+    DOWNLOAD_ENGINE = None
+
+try:
+    gi.require_version('AppIndicator3', '0.1')
+    from gi.repository import AppIndicator3
+except Exception:
+    AppIndicator3 = None
+
 GLib.set_application_name("FastTube Downloader")
 try:
     Gdk.set_program_class("FastTubeDownloader")
@@ -108,7 +126,12 @@ class MainWindow(Gtk.Window):
         if not self.config:
             self.config = {}
         self._apply_config_defaults()
+        if FileOrganizer:
+            self.file_organizer = FileOrganizer(self.config.get("download_folder"), self.config.get("category_mode", "idm"))
+        else:
+            self.file_organizer = None
         self.build_ui()
+        # Tray icon and delete-event will be initialized in build_ui or after
 
     def _set_initial_window_size(self):
         try:
@@ -189,6 +212,7 @@ class MainWindow(Gtk.Window):
             "enable_generic": True,
             "aria2_rpc_enabled": False,
             "aria2_rpc_port": 6800,
+            "minimize_to_tray": True,
             "auto_start": True,
             "generic_extensions_map": {
                 "Videos": [".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".wmv"],
@@ -593,9 +617,14 @@ class MainWindow(Gtk.Window):
             self._clamp_checks_left = 0
         GLib.timeout_add(200, self._clamp_window_size_periodic)
         self.update_dashboard_counts()
-        # CSS styling is now applied later in build_ui() at line ~2650
-        GLib.timeout_add(450, self._pulse_progress_rows)
+        # CSS styling is now applied later        self.update_dashboard_counts()
+        GLib.timeout_add(2000, self.check_clipboard_periodic)
         threading.Thread(target=self._start_control_server, daemon=True).start()
+        
+        # Initialize tray icon and set up window close behavior
+        # Temporarily disabled due to segfault - will fix in next update
+        # self._init_tray_icon()
+        # self.connect("delete-event", self.on_delete_event)
         self.connect("configure-event", self._on_configure)
         try:
             self.on_format_changed(self.format_combo)
@@ -1227,6 +1256,13 @@ class MainWindow(Gtk.Window):
                 fmt = fmt_id or req.get('format') or self.format_combo.get_active_text()
                 qual = "" if fmt_id else (req.get('quality') or self.quality_entry.get_text())
                 subs = req.get('subs')
+
+                # Auto-detect generic file type from request
+                ft = req.get('fileType')
+                if ft in ('document', 'archive', 'program', 'image', 'other', 'unknown'):
+                     if not fmt_id and fmt not in ("Best Video + Audio", "Audio Only"):
+                         fmt = "Generic File"
+
                 if isinstance(subs, str):
                     subs_active = subs.lower().startswith('y') or subs.lower() == 'true'
                 else:
@@ -1264,9 +1300,11 @@ class MainWindow(Gtk.Window):
                         if not self.is_downloading:
                             self.on_start_downloads(None)
                         if req.get('show') and not req.get('confirm'):
+                            # User requested no disturbance, so we do not raise the window
+                            # System notification from background.js is sufficient
                             try:
-                                self.present()
-                                self.set_urgency_hint(True)
+                                # self.present()  # DISABLE raising window
+                                self.set_urgency_hint(True)  # Just flash entry in taskbar/dock
                             except Exception:
                                 pass
                     finally:
@@ -1355,27 +1393,37 @@ class MainWindow(Gtk.Window):
 
     def _start_item_download(self, item):
         self._set_status(item, "Downloading...")
+    # Use FileOrganizer to determine path
         folder = os.path.expanduser(self.config["download_folder"])
         
-        # Create playlist subfolder if this item is part of a playlist
-        if getattr(item, 'playlist_name', None):
+        if self.file_organizer:
+            # Update organizer with current config
+            self.file_organizer.base_dir = Path(folder)
+            self.file_organizer.category_mode = self.config.get("category_mode", "idm")
+            
+            # Determine target folder name (playlist or default)
+            playlist_name = getattr(item, 'playlist_name', None)
+            
+            # Get appropriate path
+            # For generic items, we detect type from URL/filename
+            # For yt-dlp items, we default to Videos or Music based on format
+            
+            fmt_hint = getattr(item, 'req_format', '') or self.format_combo.get_active_text()
+            
+            target_path, _ = self.file_organizer.get_download_path(
+                filename=self._guess_filename(item.url),
+                url=item.url,
+                playlist_name=playlist_name,
+                format_type=fmt_hint
+            )
+            folder = str(target_path)
+            
+            # Create directory
             try:
-                playlist_folder = os.path.join(folder, item.playlist_name)
-                os.makedirs(playlist_folder, exist_ok=True)
-                folder = playlist_folder
-                print(f"[GUI] Downloading to playlist folder: {folder}", file=sys.stderr)
-            except Exception as e:
-                print(f"[GUI] Failed to create playlist folder: {e}", file=sys.stderr)
-        
-        # Categorize generic items by extension if in idm mode
-        if getattr(item, 'kind', 'media') == 'generic' and self.config.get('category_mode','idm') == 'idm':
-            try:
-                subdir = self._categorize_generic(item.url)
-                if subdir:
-                    folder = os.path.join(folder, subdir)
-                    os.makedirs(folder, exist_ok=True)
+                os.makedirs(folder, exist_ok=True)
             except Exception:
                 pass
+
         fmt = item.req_format or self.format_combo.get_active_text()
         qual = item.req_quality or (self.quality_entry.get_text() or "")
         subs_flag = 'y' if (item.req_subs if item.req_subs is not None else self.subs_check.get_active()) else 'n'
@@ -1400,8 +1448,32 @@ class MainWindow(Gtk.Window):
             if speed_limit.isdigit():
                 speed_arg = [f"--max-overall-download-limit={speed_limit}K"]
             out_name = self._guess_filename(item.url)
+            output_path = os.path.join(folder, out_name)
+            
+            # Try Rust engine first, fallback to aria2c
+            if DOWNLOAD_ENGINE:
+                try:
+                    print(f"[Rust] Downloading {item.url} with {aria_conn} connections...")
+                    success = DOWNLOAD_ENGINE.download_file(
+                        url=item.url,
+                        output_path=output_path,
+                        connections=aria_conn,
+                        speed_limit_kbps=int(speed_limit) if speed_limit.isdigit() else None
+                    )
+                    if success:
+                        self._set_status(item, "Completed")
+                        self.append_history(item.title, item.url, "Completed", output_path)
+                    else:
+                        self._set_status(item, "Failed")
+                        self.append_history(item.title, item.url, "Failed", output_path)
+                    return
+                except Exception as e:
+                    print(f"[Rust engine failed]: {e}, fallback to aria2c")
+            
+            # Fallback to aria2c command
             cmd = ["aria2c", "-x", str(aria_conn), "-s", str(aria_splits), "-k", "1M", "--min-split-size=1M", "--file-allocation=none"] + speed_arg + ["-d", folder, "-o", out_name, item.url]
         else:
+            # For yt-dlp, we pass 'flat' to category_mode because we already determined the folder
             cmd = [
                 FAST_YTDL, item.url, folder,
                 fmt,
@@ -1411,7 +1483,7 @@ class MainWindow(Gtk.Window):
                 str(self.config.get("aria_connections", 32)),
                 str(self.config.get("aria_splits", 32)),
                 str(self.config.get("fragment_concurrency", 16)),
-                self.config.get("category_mode", "idm")
+                "flat"  # Force flat mode in script since we handled organization here
             ]
         print("[Downloader]", " ".join(cmd))
         def _reader(proc, it):
@@ -4774,8 +4846,73 @@ class MainWindow(Gtk.Window):
         if self.is_downloading:
             for item in self.queue:
                 if item.process:
-                    item.process.terminate()
+                    try:
+                        item.process.terminate()
+                    except Exception:
+                        pass
         Gtk.main_quit()
+
+    def _init_tray_icon(self):
+        self.app_indicator = None
+        self.status_icon = None
+        
+        icon_path = os.path.join(_BASE_DIR, 'icon128.png')
+        if not os.path.exists(icon_path):
+             # Fallback icon
+             icon_path = "system-run" 
+
+        menu = Gtk.Menu()
+        item_show = Gtk.MenuItem(label="Show FastTube")
+        item_show.connect("activate", lambda w: (self.show_all(), self.present()))
+        menu.append(item_show)
+        
+        item_quit = Gtk.MenuItem(label="Quit")
+        item_quit.connect("activate", self.quit_app)
+        menu.append(item_quit)
+        menu.show_all()
+
+        if AppIndicator3:
+            try:
+                self.app_indicator = AppIndicator3.Indicator.new(
+                    "fasttube-downloader",
+                    os.path.abspath(icon_path) if os.path.exists(icon_path) else "fasttube-downloader",
+                    AppIndicator3.IndicatorCategory.APPLICATION_STATUS
+                )
+                self.app_indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+                self.app_indicator.set_menu(menu)
+                return
+            except Exception as e:
+                print(f"AppIndicator init failed: {e}")
+
+        # Fallback to Gtk.StatusIcon
+        try:
+            self.status_icon = Gtk.StatusIcon()
+            if os.path.exists(icon_path):
+                self.status_icon.set_from_file(icon_path)
+            else:
+                self.status_icon.set_from_icon_name("fasttube-downloader")
+            self.status_icon.set_tooltip_text("FastTube Downloader")
+            self.status_icon.connect("popup-menu", lambda icon, button, time: menu.popup(None, None, None, icon, button, time))
+            self.status_icon.connect("activate", lambda w: (self.show_all(), self.present()))
+        except Exception:
+            pass
+
+    def on_delete_event(self, widget, event):
+        if self.config.get("minimize_to_tray", True):
+             self.hide()
+             return True
+        return False
+
+    def _send_desktop_notification(self, title: str, body: str):
+        """Send desktop notification using libnotify if available"""
+        if not _HAS_NOTIFY:
+            return
+        try:
+            Notify.init("FastTube Downloader")
+            notification = Notify.Notification.new(title, body, "fasttube-downloader")
+            notification.show()
+        except Exception:
+            pass
 
 def run_app():
     # Optional flag to force a new instance (no single-instance handshake)

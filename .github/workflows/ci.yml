@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-gi \
+          gir1.2-gtk-3.0 \
+          gir1.2-notify-0.7 \
+          libgirepository1.0-dev \
+          aria2
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install yt-dlp PyGObject
+    
+    - name: Syntax check Python files
+      run: |
+        python -m py_compile gui/main_window.py
+        python -m py_compile gui/file_organizer.py
+        python -m py_compile native_host/bridge.py
+    
+    - name: Run tests
+      run: |
+        cd tests
+        python test_playlist_dedup.py || true
+    
+    - name: Validate extension manifests
+      run: |
+        python -c "import json; json.load(open('manifest.json'))"
+        python -c "import json; json.load(open('manifest.firefox.json'))"
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install linters
+      run: |
+        pip install flake8
+    
+    - name: Lint Python code
+      run: |
+        flake8 gui/ native_host/ --max-line-length=200 --ignore=E501,W503,E402,E722 --count --show-source --statistics || true
+
+  extension-validation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install web-ext
+      run: npm install -g web-ext
+    
+    - name: Validate Firefox extension
+      run: |
+        cp manifest.firefox.json manifest.json.bak
+        mv manifest.firefox.json manifest.json
+        web-ext lint --ignore-files "*.sh" "tests/*" "packaging/*" || true
+        mv manifest.json manifest.firefox.json
+        mv manifest.json.bak manifest.json

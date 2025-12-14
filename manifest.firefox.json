@@ -1,25 +1,32 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "FastTube Downloader",
-  "version": "1.0",
-  "description": "Download YouTube videos fast",
-  "applications": {
+  "version": "2.1.2",
+  "description": "Universal download manager with IDM-style interface - download videos, music, documents, and any file from any website",
+  "browser_specific_settings": {
     "gecko": {
       "id": "fasttube@local",
-      "strict_min_version": "91.0"
+      "strict_min_version": "109.0"
     }
   },
   "permissions": [
     "nativeMessaging",
     "downloads",
     "activeTab",
-    "storage"
+    "storage",
+    "notifications",
+    "contextMenus",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "background": {
-    "scripts": ["background.js"],
-    "persistent": false
+    "scripts": [
+      "background.js"
+    ]
   },
-  "browser_action": {
+  "action": {
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.png",
@@ -30,12 +37,13 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*.youtube.com/*",
-        "*://youtube.com/*"
+        "<all_urls>"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle",
-      "all_frames": true
+      "all_frames": false
     }
   ]
 }
