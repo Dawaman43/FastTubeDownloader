@@ -88,6 +88,7 @@ class DownloadItem:
         self.client_conn = None
         self.client_req_id = None
         self.playlist_name = None
+        self.playlist_id = None
         self.custom_folder = None
         self.custom_category = None
 
@@ -945,6 +946,28 @@ class MainWindow(Gtk.Window):
                 except ValueError:
                     return
                 self.update_title(idx, title)
+            
+            # If item has a playlist_id but no playlist_name, try to fetch it now
+            if getattr(item, 'playlist_id', None) and not getattr(item, 'playlist_name', None):
+                try:
+                    # Use original URL with --yes-playlist to handle Mixes correctly
+                    pl_proc = subprocess.run(
+                        ["yt-dlp", "--yes-playlist", "--flat-playlist", "--print", "playlist_title", "--playlist-items", "1", item.url],
+                        capture_output=True, text=True, timeout=15
+                    )
+                    if pl_proc.returncode == 0:
+                        pl_title = pl_proc.stdout.strip()
+                        if pl_title and pl_title != "NA":
+                            item.playlist_name = pl_title
+                except Exception as e:
+                    pass
+
+            # Update status from Resolving to Queued once metadata is ready
+            if item.status == "Resolving":
+                self._set_status(item, "Queued")
+                if self.config.get("auto_start", True) and not self.is_downloading:
+                     GLib.idle_add(self.on_start_downloads, None)
+
         except Exception:
             pass
 
@@ -1021,6 +1044,16 @@ class MainWindow(Gtk.Window):
         item.custom_folder = custom_folder
         item.custom_category = custom_category
 
+        # Check for list param in single video URL
+        try:
+            import urllib.parse
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+            if 'list' in qs and qs['list']:
+                item.playlist_id = qs['list'][0]
+                item.status = "Resolving"
+        except Exception:
+            pass
+
         self.queue.append(item)
         item.treeiter = self.liststore.append([item.url, item.title, item.progress, f"{item.progress}%", item.status, "", "", ""])
         threading.Thread(target=self.fetch_title_background, args=(item,), daemon=True).start()
@@ -1045,6 +1078,10 @@ class MainWindow(Gtk.Window):
             playlist_title = None
             
             # Pre-scan for playlist title
+            for raw in lines:
+                if not raw.strip(): continue
+                try:
+                    data = json.loads(raw)
                     if not playlist_title:
                         playlist_title = data.get('playlist_title') or data.get('playlist')
                         if playlist_title: break
@@ -1414,7 +1451,7 @@ class MainWindow(Gtk.Window):
                     text = text or ""
                     if text and text != self._last_clip_text:
                         self._last_clip_text = text
-                        m = re.search(r"https?://(?:www\.)?(?:youtube\.com/(?:watch\?v=[^\s&]+|playlist\?list=[^\s&]+)|youtu\.be/[^\s&]+)", text)
+                        m = re.search(r"https?://(?:www\.)?(?:youtube\.com/(?:watch\?|playlist\?)|youtu\.be/)[^\s]+", text)
                         url = None
                         if m:
                             url = m.group(0)
