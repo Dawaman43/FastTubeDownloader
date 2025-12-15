@@ -1045,13 +1045,37 @@ class MainWindow(Gtk.Window):
             playlist_title = None
             
             # Pre-scan for playlist title
-            for raw in lines:
-                if not raw.strip(): continue
-                try:
-                    data = json.loads(raw)
                     if not playlist_title:
                         playlist_title = data.get('playlist_title') or data.get('playlist')
                         if playlist_title: break
+                except: pass
+            
+            # Fallback: If title not found in dump-json, try specific fetch or heuristics
+            if not playlist_title:
+                try:
+                    # Try fetching just the title
+                    title_proc = subprocess.run(
+                        ["yt-dlp", "--no-playlist", "--print", "playlist_title", "--playlist-items", "1", url],
+                        capture_output=True, text=True, timeout=15
+                    )
+                    if title_proc.returncode == 0:
+                        potential_title = title_proc.stdout.strip()
+                        if potential_title and potential_title != "NA":
+                            playlist_title = potential_title
+                except Exception:
+                    pass
+
+            if not playlist_title:
+                # Last resort fallback
+                import time
+                ts = int(time.time())
+                playlist_title = f"Playlist_{ts}"
+                # Try to extract ID if possible
+                try:
+                    import urllib.parse
+                    qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+                    if 'list' in qs:
+                       playlist_title = f"Playlist_{qs['list'][0]}"
                 except: pass
             
             # If we didn't get passed custom settings (e.g. called from IDM dialog path already),
